@@ -214,6 +214,14 @@ section{margin-top:22px}
 .resp i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--pc);color:var(--surface);font-style:normal;font-size:.7rem}
 .resp.none{color:var(--muted);font-weight:600;padding:4px 10px;border-style:dashed}
 .late-txt{color:var(--late);font-weight:600}
+/* ¿Puedes? (tareas de varias personas) */
+.can{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:.85rem}
+.can>span{color:var(--muted);margin-right:auto}
+.can>span b{color:var(--ready);font-weight:700}
+.can button{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:6px 12px;font-weight:700;font-size:.82rem}
+.can .yes{border-color:var(--ready);color:var(--ready)}
+.can .no{border-color:var(--late);color:var(--late)}
+.can .no.arm{background:var(--late);color:var(--surface)}
 .who-pick{display:grid;gap:8px;padding:14px;border-radius:16px;background:var(--surface);border:1px solid var(--accent)}
 .who-pick span{color:var(--muted);font-size:.85rem;margin-top:-6px}
 .hintbar{display:block;width:100%;text-align:left;padding:11px 14px;border:1px dashed var(--accent);border-radius:14px;background:var(--soft);color:var(--ink);font-size:.88rem}
@@ -292,8 +300,8 @@ function respChip(id,resp){
 }
 /* Selector de personas: una, varias o todas. extra "turnos" para la limpieza por zonas. */
 function picker(sel,opts){
-  opts=opts||{};const l=sel==="turnos"?[]:rList(sel);
-  return `<div class="pick${opts.cls?" "+opts.cls:""}"${opts.id?` id="${opts.id}"`:""} role="group" aria-label="${esc(opts.label||"A quién le toca")}">${S.personas.map(p=>`<button type="button" data-act="pk" data-p="${esc(p)}" aria-pressed="${l.includes(p)}">${esc(p)}</button>`).join("")}${S.personas.length>1?`<button type="button" class="all" data-act="pkall">Todos</button>`:""}${opts.turnos?`<button type="button" data-act="pk" data-p="turnos" aria-pressed="${sel==="turnos"}">Por turnos</button>`:""}</div>`;
+  opts=opts||{};const l=sel==="turnos"?[]:rList(sel),ps=S.personas.filter(p=>!(opts.sin||[]).includes(p));
+  return `<div class="pick${opts.cls?" "+opts.cls:""}"${opts.id?` id="${opts.id}"`:""} role="group" aria-label="${esc(opts.label||"A quién le toca")}">${ps.map(p=>`<button type="button" data-act="pk" data-p="${esc(p)}" aria-pressed="${l.includes(p)}">${esc(p)}</button>`).join("")}${ps.length>1?`<button type="button" class="all" data-act="pkall">Todos</button>`:""}${opts.turnos?`<button type="button" data-act="pk" data-p="turnos" aria-pressed="${sel==="turnos"}">Por turnos</button>`:""}</div>`;
 }
 function pickVal(el){
   if(!el)return"";const on=[...el.querySelectorAll('[data-act="pk"][aria-pressed="true"]')].map(b=>b.dataset.p);
@@ -332,7 +340,7 @@ function run(action,payload,optimistic,okMsg){
   if(optimistic){optimistic();render()}
   S.pending++;S.syncErr=false;setSync();
   payload=Object.assign({yo:yo()},payload||{});
-  return api(action,payload).then(d=>{S.pending--;setSync();if(!S.pending)apply(d);if(okMsg)toast(okMsg)})
+  return api(action,payload).then(d=>{S.pending--;setSync();if(!S.pending)apply(d);if(okMsg)toast(typeof okMsg==="function"?okMsg(d):okMsg)})
     .catch(e=>{S.pending--;S.syncErr=true;setSync();fail(e);refresh(true)});
 }
 function refresh(force){
@@ -420,6 +428,15 @@ function cardResp(e){
   if(e.endsAt&&e.endsAt<=now()&&steps[e.step+1])return stepResp(e,e.step+1);
   return e.resp||"";
 }
+/* ¿Puedes? en cada tarea tuya: "Sí" lo apunta; "No puedo" te deja elegir a quién pasársela y le avisa. */
+function canGroup(e){const l=rList(cardResp(e));return l.length?l:S.personas.slice()}
+function canBar(e){
+  if(!S.me||!S.personas.includes(S.me)||String(e.id).startsWith("tmp-"))return"";
+  const g=canGroup(e);if(!g.includes(S.me))return"";
+  const ok=(e.ok||[]).filter(n=>g.includes(n)),others=ok.filter(n=>n!==S.me),yes=ok.includes(S.me);
+  const txt=yes?`<b>✅ Has dicho que puedes</b>${others.length?" · también "+esc(others.join(", ")):""}`:`¿Puedes?${others.length?` · <b>✅ ${esc(others.join(", "))}</b>`:""}`;
+  return `<div class="can"><span>${txt}</span>${yes?"":`<button class="yes" data-act="puedo" data-id="${esc(e.id)}">Sí, puedo</button>`}<button class="no" data-act="nopuedo" data-id="${esc(e.id)}">No puedo</button></div>`;
+}
 /* Orden: atrasadas, luego lo que hay que hacer ya, luego lo que está esperando un temporizador */
 function prio(e){
   if(e.type!=="ciclo")return e.date&&e.date<S.hoy?0:e.endsAt&&e.endsAt>now()?2:1;
@@ -435,6 +452,7 @@ function itemCard(e){
     <div class="run-h"><h3>${esc(title)}</h3>${S.personas.length?respChip(e.id,e.resp):""}</div>
     <div class="now">${esc(sub)}${e.endsAt&&e.endsAt>now()?` · <span class="sched">aviso ${esc(whenLabel(e.endsAt))}</span>`:""}</div>
     <div class="run-a"><button class="btn go" data-act="doneitem" data-id="${esc(e.id)}">Hecho</button><button class="link" data-act="cancel" data-id="${esc(e.id)}" data-label="Borrar">Borrar</button></div>
+    ${S.personas.length?canBar(e):""}
   </article>`;
 }
 
@@ -531,6 +549,7 @@ function runCard(e){
     ${i.timed&&!i.ready?`<div class="clock" data-ends="${e.endsAt}">${clock(i.left)}</div><div class="ends">Termina ${whenLabel(e.endsAt)}</div><div class="bar"><i data-bar="${e.endsAt}" data-min="${stepMins(i.cur)}" style="width:${pct}%"></i></div>`:""}
     ${i.steps.length>1?`<div class="steps">${i.steps.map((s,k)=>{const r=S.personas.length?stepResp(e,k):"";return `<span class="${k<doneUntil?"done":k===doneUntil?"cur":""}">${esc(s.name)}${isTimed(s)?" · "+stepLabel(s):""}${r?" · "+esc(rLabel(r)):""}</span>`}).join("")}</div>`:""}
     <div class="run-a">${btn}<button class="link" data-act="cancel" data-id="${esc(e.id)}">Cancelar</button></div>
+    ${S.personas.length?canBar(e):""}
   </article>`;
 }
 function pendRow(e,isLate){
@@ -833,6 +852,23 @@ document.addEventListener("click",e=>{
       }).catch(err=>{b.disabled=false;b.textContent="Probar avisos";fail(err)});
       break}
     case "filt":S.filter=b.dataset.k;render();break;
+    case "puedo":{const x=S.act.find(t=>t.id===b.dataset.id);if(!x)break;
+      run("casa.puedo",{id:x.id,puede:true},()=>{x.ok=(x.ok||[]).filter(n=>n!==S.me).concat(S.me)},d=>"Apuntado: puedes"+(d&&d.avisados&&d.avisados.length?" · avisado por Telegram":""));break}
+    case "nopuedo":{const x=S.act.find(t=>t.id===b.dataset.id);if(!x)break;
+      const rest=canGroup(x).filter(n=>n!==S.me);
+      if(S.personas.length<2){toast("Añade a más personas en ⚙️ del inicio para poder pasarla");break}
+      openSheet(`<h2>¿A quién se la pasas?</h2><p class="hint" style="margin:-6px 0 12px;font-size:.85rem;color:var(--muted)">${esc(x.type==="zona"?x.zone:x.name)}. Te quito de la tarea y aviso por Telegram a quien elijas${rest.length?" (y a "+esc(rest.join(", "))+")":""}.</p>${picker(rest.join(", "),{id:"apick",sin:[S.me]})}<div class="actions" style="margin-top:16px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn" data-act="cantok" id="assignok" data-id="${esc(x.id)}">Guardar y avisar</button></div>`);
+      checkAssign();break}
+    case "cantok":{
+      const x=S.act.find(t=>t.id===b.dataset.id),r=pickVal($("#apick"));
+      if(!x)break;if(!r){toast("Elige al menos una persona");$("#apick").classList.add("missing");break}
+      closeSheetQuiet();
+      const nextStep=x.type==="ciclo"&&rList(cardResp(x)).join(", ")!==rList(x.resp).join(", ");
+      run("casa.puedo",{id:x.id,puede:false,resp:r},()=>{x.ok=(x.ok||[]).filter(n=>n!==S.me);
+        if(nextStep){x.steps=runSteps(x).map(s=>Object.assign({},s));if(x.steps[x.step+1])x.steps[x.step+1].resp=r}
+        else{x.resp=r;if(x.steps&&x.steps[x.step])x.steps[x.step].resp=r}},
+        d=>"Ahora le toca a "+rLabel(r)+(d&&d.avisados&&d.avisados.length?" · avisado por Telegram":""));
+      break}
     case "assign":{
       e.preventDefault();e.stopPropagation();
       const id=b.dataset.id;if(id.startsWith("tmp-"))break;

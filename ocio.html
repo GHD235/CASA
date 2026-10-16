@@ -133,6 +133,26 @@ h1{font-family:var(--f-display);font-weight:900;font-size:2.5rem;line-height:.95
 .actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
 .toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
 .loading{color:var(--muted);text-align:center;padding:40px 0}
+/* Buscar en internet */
+.web{margin-top:16px}
+.web-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:0 2px 8px}
+.web-h b{font-family:var(--f-display);font-weight:800;font-size:1.15rem;text-transform:uppercase;letter-spacing:.02em}
+.web-h span{font-size:.78rem;color:var(--muted)}
+.wres{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 10px 8px 8px;margin-bottom:6px}
+.wres .main{flex:1;min-width:0;display:flex;gap:10px;align-items:center;text-align:left;border:0;background:none;padding:0}
+.wres .cover{width:40px;height:58px}
+.wres h4{margin:0;font-size:.95rem;font-weight:700;overflow-wrap:anywhere}
+.wres .meta{margin-top:2px}
+.wadd{flex:none;border:0;border-radius:10px;padding:8px 11px;font-weight:700;font-size:.82rem;background:var(--accent);color:var(--accent-ink)}
+.wadd.ok{background:var(--soft);color:var(--muted)}
+.web .note{font-size:.85rem;color:var(--muted);padding:6px 2px}
+.sugbox{display:grid;gap:4px;margin-top:2px}
+.sugbox:empty{display:none}
+.sug{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:6px 8px}
+.sug .cover{width:30px;height:44px;border-radius:5px}
+.sug b{display:block;font-size:.9rem}
+.sug small{color:var(--muted);font-size:.76rem}
+.sugnote{font-size:.78rem;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -142,7 +162,7 @@ h1{font-family:var(--f-display);font-weight:900;font-size:2.5rem;line-height:.95
   <div class="counters" id="counters"></div>
   <div class="types" id="types"></div>
   <div class="tools">
-    <input type="search" id="q" placeholder="Buscar título o plataforma" aria-label="Buscar título">
+    <input type="search" id="q" placeholder="Buscar en tu lista o en internet" aria-label="Buscar título">
     <select id="sort" aria-label="Ordenar">
       <option value="recent">Recientes</option>
       <option value="rating">Mejor nota</option>
@@ -150,6 +170,7 @@ h1{font-family:var(--f-display);font-weight:900;font-size:2.5rem;line-height:.95
     </select>
   </div>
   <div id="list"><p class="loading">Cargando tu lista…</p></div>
+  <div class="web" id="web" hidden></div>
 </div>
 <button class="fab" id="add">+ Añadir</button>
 <div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
@@ -176,6 +197,7 @@ const uid=()=>(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().t
 const T=k=>TYPES.find(t=>t.k===k)||TYPES[0];
 function imgUrl(id,w){return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w"+(w||300)}
 function coverTag(i,w){
+  if(/^https?:/.test(i.photo||""))return `<img class="cover" src="${esc(i.photo)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'cover ph',textContent:${esc(JSON.stringify((i.title||"?").trim().charAt(0)))}}))">`;
   if(i.photo)return `<img class="cover" src="${imgUrl(i.photo,w)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='https://drive.google.com/thumbnail?id=${encodeURIComponent(i.photo)}&sz=w${w||300}'">`;
   return `<span class="cover ph">${esc((i.title||"?").trim().charAt(0))}</span>`;
 }
@@ -213,12 +235,12 @@ function fail(e){const c=e&&e.code;
 
 const writing={};
 function put(it){
-  st.items[it.id]=it;cwrite();render();
+  st.items[it.id]=it;cwrite();render();if(WEB.res)renderWeb();
   const prev=writing[it.id]||Promise.resolve();
   writing[it.id]=prev.then(()=>track(api("ocio.save",{item:it}))).catch(()=>{});
 }
 function del(id){
-  delete st.items[id];cwrite();render();
+  delete st.items[id];cwrite();render();if(WEB.res)renderWeb();
   track(api("ocio.delete",{id})).catch(()=>{});
 }
 function applyList(list){const m={};(list||[]).forEach(i=>m[i.id]=i);st.items=m;st.ready=true;cwrite();render()}
@@ -250,7 +272,7 @@ function render(){
   $("#sort").value=st.sort;
   if(!st.ready)return;
   const q=st.q.trim().toLowerCase();
-  let list=byType.filter(i=>i.status===st.status&&(!q||(i.title||"").toLowerCase().includes(q)||(i.platform||"").toLowerCase().includes(q)));
+  let list=byType.filter(i=>i.status===st.status&&(!q||(i.title||"").toLowerCase().includes(q)||(i.platform||"").toLowerCase().includes(q)||(i.info||"").toLowerCase().includes(q)));
   if(st.sort==="az")list.sort((a,b)=>(a.title||"").localeCompare(b.title||"","es"));
   else if(st.sort==="rating")list.sort((a,b)=>(b.rating||0)-(a.rating||0)||(b.updatedAt||0)-(a.updatedAt||0));
   else list.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
@@ -259,14 +281,53 @@ function render(){
     L.innerHTML=`<div class="empty"><h3>Empezad la lista</h3><p>Apuntad esa peli que os recomendaron, la serie que queréis empezar, el libro de la mesilla o el juego que está a medias. Con portada, dónde verlo y nota al terminar.</p><button class="btn" data-act="new">+ Añadir el primero</button></div>`;return}
   if(!list.length){
     const s=STATUS.find(x=>x.k===st.status).pl.toLowerCase();
-    L.innerHTML=`<div class="empty"><h3>Nada por aquí</h3><p>${q?"Ningún título coincide con la búsqueda.":`No hay ${st.type==="all"?"nada":T(st.type).pl.toLowerCase()} en ${s}.`}</p></div>`;return}
+    L.innerHTML=`<div class="empty"><h3>Nada por aquí</h3><p>${q?"No está en tu lista. Mira abajo lo que hay en internet.":`No hay ${st.type==="all"?"nada":T(st.type).pl.toLowerCase()} en ${s}.`}</p></div>`;return}
   L.innerHTML=`<div class="list">`+list.map(i=>{
     const t=T(i.type);let quick="";
     if(i.status==="pendiente")quick=`<button class="quick" data-act="start" data-id="${esc(i.id)}">Empezar</button>`;
     else if(i.status==="encurso")quick=`<button class="quick" data-act="finish" data-id="${esc(i.id)}">Terminado</button>`;
     else if(!i.rating)quick=`<button class="quick" data-act="rate" data-id="${esc(i.id)}">Poner nota</button>`;
-    return `<article class="card" style="--c:var(--t-${t.k})"><button class="main" data-act="edit" data-id="${esc(i.id)}">${coverTag(i,140)}<span class="txt"><h3>${esc(i.title)}</h3><span class="meta"><span class="kind">${t.l}</span>${i.platform?`<span>${esc(i.platform)}</span>`:""}${i.status==="terminado"&&i.rating?starsHtml(i.rating):""}</span></span></button>${quick}</article>`;
+    return `<article class="card" style="--c:var(--t-${t.k})"><button class="main" data-act="edit" data-id="${esc(i.id)}">${coverTag(i,140)}<span class="txt"><h3>${esc(i.title)}</h3><span class="meta"><span class="kind">${t.l}</span>${i.platform?`<span>${esc(i.platform)}</span>`:""}${i.info&&!i.platform?`<span>${esc(i.info)}</span>`:""}${i.status==="terminado"&&i.rating?starsHtml(i.rating):""}</span></span></button>${quick}</article>`;
   }).join("")+`</div>`;
+}
+
+/* ---------- buscar en internet ---------- */
+const WEB={q:"",t:"",res:null,busy:false,err:false,added:{}};
+const webCache={};
+let webTimer=0;
+function infoOf(r){return [r.year,r.info].filter(Boolean).join(" · ")}
+function webSearch(q,tipo){
+  const k=tipo+"|"+q.toLowerCase();
+  if(webCache[k])return Promise.resolve(webCache[k]);
+  return api("ocio.buscar",{q,tipo}).then(r=>{webCache[k]=r||[];return webCache[k]});
+}
+function inList(r){const t=(r.title||"").trim().toLowerCase();return Object.values(st.items).find(i=>i.type===r.type&&(i.title||"").trim().toLowerCase()===t)}
+function scheduleWeb(){
+  clearTimeout(webTimer);
+  const q=st.q.trim();
+  if(q.length<2){WEB.q="";WEB.res=null;renderWeb();return}
+  const tipo=st.type;
+  if(WEB.q===q&&WEB.t===tipo&&WEB.res)return;
+  WEB.busy=true;WEB.err=false;renderWeb();
+  webTimer=setTimeout(()=>{
+    webSearch(q,tipo).then(r=>{if(st.q.trim()!==q||st.type!==tipo)return;WEB.q=q;WEB.t=tipo;WEB.res=r;WEB.busy=false;renderWeb()})
+      .catch(()=>{if(st.q.trim()!==q)return;WEB.busy=false;WEB.err=true;WEB.res=null;renderWeb()});
+  },600);
+}
+function renderWeb(){
+  const box=$("#web"),q=st.q.trim();
+  if(q.length<2){box.hidden=true;box.innerHTML="";return}
+  box.hidden=false;
+  let h=`<div class="web-h"><b>En internet</b><span>${WEB.busy?"Buscando…":"Toca + para añadir"}</span></div>`;
+  if(WEB.err)h+=`<p class="note">No se pudo buscar. Revisa la conexión y vuelve a escribir.</p>`;
+  else if(WEB.res&&!WEB.res.length&&!WEB.busy)h+=`<p class="note">Nada encontrado con «${esc(q)}». Prueba con el título original o añádelo a mano con «+ Añadir».</p>`;
+  else if(WEB.res)h+=WEB.res.map((r,k)=>{const t=T(r.type),got=WEB.added[r.type+"|"+r.title+"|"+r.year]||inList(r);
+    return `<div class="wres" style="--c:var(--t-${t.k})"><button class="main" data-act="wedit" data-k="${k}">${coverTag({photo:r.cover,title:r.title},120)}<span class="txt"><h4>${esc(r.title)}</h4><span class="meta"><span class="kind">${t.l}</span>${infoOf(r)?`<span>${esc(infoOf(r))}</span>`:""}</span></span></button>${got?`<button class="wadd ok" data-act="wgo" data-k="${k}">En tu lista</button>`:`<button class="wadd" data-act="wadd" data-k="${k}" aria-label="Añadir ${esc(r.title)}">+ Añadir</button>`}</div>`}).join("");
+  box.innerHTML=h;
+}
+function fromWeb(r,extra){
+  const now=Date.now();
+  return Object.assign({id:uid(),title:r.title,type:r.type,status:"pendiente",rating:0,platform:"",photo:r.cover||"",info:infoOf(r),createdAt:now,updatedAt:now},extra||{});
 }
 
 /* ---------- hoja ---------- */
@@ -300,7 +361,7 @@ function drawEditor(keepFocus){
   const cover=previewUrl?`<img class="cover" src="${previewUrl}" alt="">`:coverTag(d,200);
   openSheet(`<h2>${isEdit?"Editar":"Añadir"}</h2>
   <form id="f">
-    <div class="field"><label class="flabel" for="ft">Título</label><input id="ft" required value="${esc(d.title)}" placeholder="${{peli:"Ej. Dune: Parte Dos",serie:"Ej. The Bear",libro:"Ej. El infinito en un junco",juego:"Ej. Hades II"}[d.type]}" autocomplete="off"></div>
+    <div class="field"><label class="flabel" for="ft">Título</label><input id="ft" required value="${esc(d.title)}" placeholder="${{peli:"Ej. Dune: Parte Dos",serie:"Ej. The Bear",libro:"Ej. El infinito en un junco",juego:"Ej. Hades II"}[d.type]}" autocomplete="off">${d.info?`<span class="sugnote" id="finfo">${esc(d.info)}</span>`:""}<div class="sugbox" id="sugbox"></div></div>
     <div class="field"><span class="flabel">Tipo</span><div class="seg typed">${TYPES.map(x=>`<button type="button" style="--c:var(--t-${x.k})" data-act="ftype" data-k="${x.k}" aria-pressed="${d.type===x.k}">${x.l}</button>`).join("")}</div></div>
     <div class="field"><span class="flabel">Estado</span><div class="seg">${STATUS.map(x=>`<button type="button" data-act="fstatus" data-k="${x.k}" aria-pressed="${d.status===x.k}">${x.l}</button>`).join("")}</div></div>
     <div class="field"><label class="flabel" for="fp">Dónde ${t.v}lo</label><input id="fp" value="${esc(d.platform)}" placeholder="Plataforma o formato" autocomplete="off"><div class="sugg">${t.plat.map(p=>`<button type="button" data-act="fplat" data-v="${esc(p)}">${esc(p)}</button>`).join("")}</div></div>
@@ -309,9 +370,10 @@ function drawEditor(keepFocus){
     <div class="actions">${isEdit?`<button type="button" class="btn danger" data-act="fdel">Borrar</button>`:"<span></span>"}<button class="btn" type="submit" id="fsave" ${uploading?"disabled":""}>Guardar</button></div>
   </form>`);
   const ft=$("#ft"),fp=$("#fp"),pf=$("#pfile");
-  ft.addEventListener("input",()=>draft.title=ft.value);
+  ft.addEventListener("input",()=>{draft.title=ft.value;suggest()});
   fp.addEventListener("input",()=>draft.platform=fp.value);
   if(!isEdit&&!keepFocus)setTimeout(()=>ft.focus(),60);
+  if(isEdit&&!d.photo&&!keepFocus)suggest();   // sin portada: busca la suya en internet
   pf.addEventListener("change",async()=>{
     const f=pf.files&&pf.files[0];if(!f)return;
     try{
@@ -335,6 +397,21 @@ function drawEditor(keepFocus){
     toast(isEdit?"Guardado":`${T(it.type).l} añadid${it.type==="peli"||it.type==="serie"?"a":"o"}`);
   });
 }
+/* Mientras escribes el título: sugerencias de internet para completar portada y datos */
+let sugT=0,sugList=[];
+function suggest(){
+  clearTimeout(sugT);const box=$("#sugbox");if(!box)return;
+  const q=(draft.title||"").trim();
+  if((isEdit&&draft.photo)||q.length<3){box.innerHTML="";sugList=[];return}
+  const tipo=draft.type;
+  sugT=setTimeout(()=>{
+    webSearch(q,tipo).then(r=>{
+      const b=$("#sugbox");if(!b||(draft.title||"").trim()!==q||draft.type!==tipo)return;
+      sugList=(r||[]).slice(0,4);
+      b.innerHTML=sugList.length?`<span class="sugnote">${isEdit?"Portadas de internet: toca la buena":"¿Es alguno de estos? Toca para completar"}</span>`+sugList.map((x,k)=>`<button type="button" class="sug" data-act="fsug" data-k="${k}">${coverTag({photo:x.cover,title:x.title},80)}<span><b>${esc(x.title)}</b><small>${esc(infoOf(x))}</small></span></button>`).join(""):"";
+    }).catch(()=>{});
+  },650);
+}
 function openRate(id){
   const i=st.items[id];
   openSheet(`<h2>¿Qué tal ${i.type==="libro"?"el libro":i.type==="juego"?"el juego":i.type==="serie"?"la serie":"la peli"}?</h2><p style="margin:-6px 0 12px;font-weight:600">${esc(i.title)}</p><div class="rate" style="justify-content:center">${[1,2,3,4,5].map(n=>`<button type="button" data-act="qrate" data-id="${esc(id)}" data-n="${n}" aria-label="${n} estrellas" style="font-size:2.6rem">★</button>`).join("")}</div><div class="actions" style="justify-content:center"><button class="btn ghost" data-act="close">Ahora no</button></div>`);
@@ -346,7 +423,7 @@ document.addEventListener("click",e=>{
   const a=b.dataset.act;
   switch(a){
     case "status":st.status=b.dataset.k;saveUi();render();break;
-    case "type":st.type=b.dataset.k;saveUi();render();break;
+    case "type":st.type=b.dataset.k;saveUi();render();scheduleWeb();break;
     case "new":openEditor(null);break;
     case "edit":openEditor(b.dataset.id);break;
     case "close":closeSheet();break;
@@ -354,9 +431,15 @@ document.addEventListener("click",e=>{
     case "finish":{const i=st.items[b.dataset.id],now=Date.now();put(Object.assign({},i,{status:"terminado",updatedAt:now,finishedAt:now}));openRate(i.id);break}
     case "rate":openRate(b.dataset.id);break;
     case "qrate":{const i=st.items[b.dataset.id];put(Object.assign({},i,{rating:+b.dataset.n,updatedAt:Date.now()}));closeSheet();toast(RLBL[+b.dataset.n]);break}
-    case "ftype":draft.type=b.dataset.k;drawEditor(true);break;
+    case "ftype":draft.type=b.dataset.k;drawEditor(true);suggest();break;
     case "fstatus":draft.status=b.dataset.k;drawEditor(true);break;
     case "fplat":draft.platform=b.dataset.v;$("#fp").value=b.dataset.v;break;
+    case "fsug":{const x=sugList[+b.dataset.k];if(!x)break;draft.title=x.title;draft.info=infoOf(x);if(x.cover&&!tempPhoto){draft.photo=x.cover;previewUrl=""}sugList=[];drawEditor(true);break}
+    case "wadd":{const r=WEB.res&&WEB.res[+b.dataset.k];if(!r)break;if(inList(r)){toast("Ya está en tu lista");break}
+      const it=fromWeb(r);put(it);WEB.added[r.type+"|"+r.title+"|"+r.year]=1;renderWeb();toast(`${T(r.type).l} añadid${r.type==="peli"||r.type==="serie"?"a":"o"} a Pendientes`);break}
+    case "wgo":{const r=WEB.res&&WEB.res[+b.dataset.k],i=r&&inList(r);if(i)openEditor(i.id);break}
+    case "wedit":{const r=WEB.res&&WEB.res[+b.dataset.k];if(!r)break;const i=inList(r);if(i){openEditor(i.id);break}
+      draft=fromWeb(r);draft.id="";isEdit=false;uploading=false;tempPhoto="";previewUrl="";drawEditor(true);break}
     case "frate":{const n=+b.dataset.n;draft.rating=draft.rating===n?0:n;drawEditor(true);break}
     case "fdel":
       if(!delArm){delArm=true;b.textContent="¿Seguro? Toca otra vez";setTimeout(()=>delArm=false,3500);break}
@@ -364,7 +447,7 @@ document.addEventListener("click",e=>{
   }
 });
 $("#add").addEventListener("click",()=>openEditor(null));
-$("#q").addEventListener("input",e=>{st.q=e.target.value;render()});
+$("#q").addEventListener("input",e=>{st.q=e.target.value;render();scheduleWeb()});
 $("#sort").addEventListener("change",e=>{st.sort=e.target.value;saveUi();render()});
 
 render();
