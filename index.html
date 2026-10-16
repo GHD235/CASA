@@ -87,6 +87,8 @@ window.casaApi=function(b){
     return r;
   },function(e){throw {message:String(e&&e.message||e)}});
 };
+/* Tras "Cambiar la clave de todos", este móvil se queda con su clave nueva */
+window.casaSetKey=function(k){if(k&&/^[A-Za-z0-9]{8,}$/.test(k)){key=k;lss(K_KEY,key)}};
 /* Guarda en el móvil lo último de cada app, para enseñarlo al momento la próxima vez */
 function remember(b,d){
   if(!cache||!d)return;
@@ -127,7 +129,7 @@ function make(app){
   var f=document.createElement("iframe");
   f.className="app";f.title=app;f.setAttribute("allow","clipboard-read; clipboard-write; web-share");
   f.addEventListener("load",function(){f.ready=true;try{f.contentWindow.__casaShow(app===cur)}catch(e){}});
-  f.src=app+".html?v=2026-10-14.1";
+  f.src=app+".html?v=2026-10-16.1";
   document.body.appendChild(f);frames[app]=f;return f;
 }
 function show(app){

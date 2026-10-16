@@ -40,6 +40,7 @@ window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d)
   --menu:#2F6B45; --menu-soft:#E2EEE4; --ocio:#3B2FD9; --ocio-soft:#E6E4FB; --tup:#D9680F;
   --casa:#0E7C86; --casa-soft:#DDEEEF; --late:#C62828;
   --shadow:0 1px 2px rgba(26,31,38,.06),0 8px 24px rgba(26,31,38,.08);
+  --accent:#0E7C86; --accent-ink:#FFFFFF; --soft:#DDEEEF; --ready:#1F8A4C; --danger:#B3261E;
   --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
   --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
@@ -47,6 +48,7 @@ window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d)
   --bg:#101318; --surface:#191D24; --ink:#E9EDF2; --muted:#9AA3AE; --line:#2A303A;
   --menu:#74C38F; --menu-soft:#1C2B22; --ocio:#9C93FF; --ocio-soft:#221F3D; --tup:#F2A057;
   --casa:#4FC3C9; --casa-soft:#1B2E31; --late:#FF7A70;
+  --accent:#4FC3C9; --accent-ink:#0B1516; --soft:#1B2E31; --ready:#5BD18C; --danger:#F2867E;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}}
 
 *{box-sizing:border-box}
@@ -80,13 +82,64 @@ h1{font-family:var(--f-display);font-weight:800;font-size:2.1rem;line-height:1.0
 .info .none{color:var(--muted)}
 .chip{display:inline-block;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border-radius:99px;border:1px solid var(--tup);color:var(--tup);margin-left:4px;vertical-align:1px}
 
+/* Ajustes de la casa (hoja inferior): personas, enlaces con clave y Telegram */
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+button{font:inherit;color:inherit}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.iconbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.btn{border:0;border-radius:12px;padding:10px 16px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn.go{background:var(--ready);color:var(--accent-ink)}
+.btn.ghost{background:var(--soft);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid currentColor}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.backdrop{position:fixed;inset:0;background:rgba(8,14,16,.5);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;max-height:90%;overflow:auto;border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow);animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 12px}
+.sheet h2{font-family:var(--f-display);margin:0 0 12px;font-size:1.3rem}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.flabel{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.field input,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.field .hint{font-size:.78rem;color:var(--muted)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 12px;font-weight:600;font-size:.88rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
+.testrow{display:grid;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg)}
+.testrow small{color:var(--muted)}
+.testrow span{font-size:.85rem;font-weight:600;color:var(--ready)}
+.testrow.falta span,.testrow.sinbot span{color:var(--late)}
+.testrow.error span{color:var(--danger)}
+.pplrow{display:grid;grid-template-columns:minmax(0,1fr) auto 30px;gap:6px;align-items:center;margin-bottom:8px}
+.pplrow .tgok{font-size:.8rem;font-weight:600;color:var(--ready);padding:6px 4px;white-space:nowrap;border:0;background:none}
+.pplrow .tgok.arm{color:var(--danger)}
+.pplrow .tglink{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:10px;padding:8px 10px;font-size:.82rem;font-weight:600;white-space:nowrap}
+.wahelp .tgrow{display:flex;gap:6px;margin-top:8px}
+.wahelp .tgrow input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px}
+.wahelp .lnk{border:0;background:none;color:var(--accent);padding:0;font:inherit;text-decoration:underline}
+.wahelp{font-size:.82rem;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:2px 0 8px;line-height:1.45}
+.wahelp b{color:var(--ink,inherit)}
+.wahelp a{color:var(--accent)}
+.pplrow input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 10px;min-width:0;width:100%}
+.pplrow .rm{border:0;background:none;color:var(--muted);font-size:1.2rem}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
+.loading{color:var(--muted);text-align:center;padding:40px 0}
+.acclist{display:grid;gap:8px;margin:10px 0 12px}
+.accrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.accrow span{font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accbtn{flex:none;display:inline-block;padding:9px 12px;border-radius:10px;background:var(--accent);color:var(--accent-ink)!important;font-weight:700;font-size:.82rem;text-decoration:none}
+.btn.wide{width:100%}
+.accfoot{margin-top:10px;font-size:.78rem;color:var(--muted)}
+.sheet p.sub{margin:-6px 0 12px;font-size:.85rem;color:var(--muted)}
 .err{margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--surface);border:1px dashed var(--line);color:var(--muted);font-size:.88rem}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <p class="date" id="date"></p>
-  <h1 id="hello">Hola</h1>
+  <div class="head"><div><p class="date" id="date"></p>
+  <h1 id="hello">Hola</h1></div>
+  <button class="iconbtn" id="cfgbtn" aria-label="Ajustes de la casa"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button></div>
 
   <nav class="grid" aria-label="Aplicaciones">
     <a class="tile" href="#casa:menu" target="_top" style="--c:var(--menu);--soft:var(--menu-soft)">
@@ -107,6 +160,8 @@ h1{font-family:var(--f-display);font-weight:800;font-size:2.1rem;line-height:1.0
   </nav>
   <div class="err" id="err" hidden></div>
 </div>
+<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Ajustes de la casa"></div></div>
+<div class="toast" id="toast" hidden></div>
 
 <script>
 window.BOOT = (window.parent!==window&&window.parent.casaBoot)?window.parent.casaBoot("inicio"):null;
@@ -163,6 +218,118 @@ if(c){
 }
 
 }
+
+/* ---------- Ajustes de la casa: quién vive, enlaces con clave y Telegram (para todas las apps) ---------- */
+function api(action,payload){
+  return new Promise((res,rej)=>{
+    if(!(window.google&&google.script&&google.script.run)){rej({code:"sin_servidor"});return}
+    google.script.run
+      .withSuccessHandler(r=>r&&r.ok?res(r.data):rej({code:(r&&r.error)||"error"}))
+      .withFailureHandler(e=>rej({code:"red",message:e&&e.message}))
+      .api(Object.assign({action},payload||{}));
+  });
+}
+let toastT;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800)}
+function fail(e){const c=e&&e.code;toast(c==="red"?"Sin conexión. No se ha guardado.":c==="sin_acceso"?"Tu cuenta no tiene acceso a la hoja.":String(c||"error"))}
+const C={personasFull:[],tgBot:"",appUrl:"",miEmail:"",open:false,tgWait:false};
+function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;C.open=true}
+function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";C.open=false}
+$("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
+function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||""}
+function openCasa(){
+  openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Cargando…</p>`);
+  api("casa.load").then(d=>{setCasa(d);if(C.open)drawCasa()}).catch(e=>{closeSheet();fail(e)});
+}
+function tgSetup(){return `<b>Avisos por Telegram</b>: primero cread vuestro bot (una vez, 2 minutos):<br>1. En Telegram busca <b>@BotFather</b> y pulsa <b>Iniciar</b>.<br>2. Mándale <b>/newbot</b>. Te pide un nombre (por ejemplo <i>Tareas de casa</i>) y un usuario que acabe en <b>bot</b>.<br>3. Te contesta con un <b>token</b>, algo como <i>123456789:AAH…</i>. Cópialo entero y pégalo aquí:<div class="tgrow"><input id="tgtoken" placeholder="Token del bot" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="tgsave">Guardar</button></div>`}
+function waLink(p){const url="https://t.me/"+C.tgBot+"?start="+p.code;return "https://wa.me/?text="+encodeURIComponent("Hola "+p.nombre+" 👋 Para recibir los avisos de Tareas de casa, abre este enlace y pulsa Iniciar: "+url)}
+function appLink(p){return C.appUrl+"#k="+p.clave}
+function appBox(){
+  const ps=C.personasFull.filter(p=>p.clave);
+  if(!C.appUrl)return `<b>App sin el aviso de Google</b> (versión de GitHub): pega aquí su enlace cuando la tengas publicada.<div class="tgrow"><input id="appurl" placeholder="https://….github.io/casa/" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="appurlsave">Guardar</button></div>`;
+  return `Cada persona entra con <b>su enlace</b>, que lleva su clave. Solo hace falta abrirlo la primera vez en su móvil.
+    <div class="acclist">${ps.map(p=>`<div class="accrow"><span>${esc(p.nombre)}</span><a class="accbtn" href="https://wa.me/?text=${encodeURIComponent("Hola "+p.nombre+" 👋 Esta es tu app de casa. Ábrela desde este enlace (solo la primera vez) y añádela a la pantalla de inicio: "+appLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a></div>`).join("")}</div>
+    <button type="button" class="btn danger wide" data-act="appnewkeys">Cambiar la clave de todos</button>
+    <span class="hint">Úsalo si algún enlace ha llegado a quien no debía: los enlaces viejos dejan de funcionar y hay que mandar los nuevos a cada uno.</span>
+    <div class="accfoot">Dirección de la app: <a class="lnk" href="${esc(C.appUrl)}" target="_blank" rel="noopener">${esc(C.appUrl.replace(/^https:[/][/]/,""))}</a> · <button type="button" class="lnk" data-act="appurlchange">cambiar</button></div>`;
+}
+function tgBox(){
+  if(!C.tgBot)return tgSetup();
+  const f=C.personasFull.filter(p=>!p.chat&&p.code);
+  return `<b>Avisos por Telegram</b> · bot <b>@${esc(C.tgBot)}</b><br>Cada uno, desde su móvil, pulsa <b>Vincular</b> junto a su nombre: se abre Telegram, pulsa <b>Iniciar</b> y vuelve aquí.${f.length?`<br>Falta por vincular (mándale su enlace, o que escriba al bot su código):${f.map(p=>`<br>· ${esc(p.nombre)}: <b>/start ${esc(p.code)}</b> <a class="lnk" href="${esc(waLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`).join("")}`:""}<br><button type="button" class="lnk" data-act="tgcheck">Comprobar</button> · <button type="button" class="lnk" data-act="tgchange">Cambiar bot</button>`;
+}
+function pplRow(p){return `<div class="pplrow"><input class="pn" value="${esc(p.nombre)}" placeholder="Nombre" aria-label="Nombre" autocomplete="off">${C.tgBot?(p.chat?`<button type="button" class="tgok" data-act="tgunlink" data-n="${esc(p.nombre)}" aria-label="${esc(p.nombre)} vinculado. Toca para desvincular">Telegram ✔</button>`:`<button type="button" class="tglink" data-act="tglink" data-code="${esc(p.code||"")}">Vincular</button>`):"<span></span>"}<button type="button" class="rm" data-act="rmppl" aria-label="Quitar persona">×</button><input class="pe" type="hidden" value="${esc(p.email||"")}"></div>`}
+function pplForm(){return [...document.querySelectorAll(".pplrow")].map(r=>({nombre:r.querySelector(".pn").value.trim(),email:r.querySelector(".pe").value.trim().toLowerCase()})).filter(p=>p.nombre)}
+function drawCasa(){
+  openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Para todas las apps: quién vive en casa, cómo entra cada uno y los avisos por Telegram.</p>
+    <div class="field"><span class="flabel">Quién vive en casa</span>
+      <div id="pplrows">${(C.personasFull.length?C.personasFull:[{nombre:"",email:C.miEmail},{nombre:"",email:""}]).map(pplRow).join("")}</div>
+      <button type="button" class="btn ghost" data-act="addppl">+ Persona</button>
+      <span class="hint">Cada persona puede usar todas las apps y aparece para repartir las tareas.</span>
+      <div class="actions"><span></span><button type="button" class="btn" data-act="savepeople">Guardar personas</button></div>
+    </div>
+    <div class="field"><span class="flabel">Acceso a la app</span><div class="wahelp">${appBox()}</div></div>
+    <div class="field"><span class="flabel">Avisos por Telegram</span><div class="wahelp">${tgBox()}</div>
+      <span class="hint">Para desvincular a alguien, toca su «Telegram ✔» dos veces. Cuándo y a quién avisar se elige en ⚙️ de Tareas.</span></div>
+    <div class="actions"><span></span><button type="button" class="btn ghost" data-act="close">Cerrar</button></div>`);
+}
+/* Al volver de Telegram tras pulsar Vincular: mira quién ha pulsado Iniciar */
+function tgCheck(manual){
+  const antes=C.personasFull.filter(p=>p.chat).length;
+  api("casa.tgLink",{}).then(d=>{
+    setCasa(d);const ahora=C.personasFull.filter(p=>p.chat).length;
+    if(ahora>antes){C.tgWait=C.personasFull.some(p=>!p.chat);toast("Telegram vinculado ✔")}
+    else if(manual){const g=d.tgDiag||{};toast(g.error?"Telegram: "+g.error:!g.mensajes?"El bot no ha recibido nada. Pulsa Vincular y luego Iniciar en Telegram.":"Aún no. Pulsa Vincular desde ese móvil o escribe al bot el código que sale aquí.")}
+    if(C.open)drawCasa();
+  }).catch(fail);
+}
+document.addEventListener("visibilitychange",()=>{if(C.tgWait&&C.open&&document.visibilityState==="visible")setTimeout(()=>tgCheck(false),1500)});
+$("#cfgbtn").addEventListener("click",openCasa);
+const reload=d=>{setCasa(d);drawCasa()};
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b||!$("#sheet").contains(b))return;
+  switch(b.dataset.act){
+    case "close":closeSheet();break;
+    case "addppl":$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:""}));{const r=document.querySelectorAll(".pplrow .pn");r[r.length-1].focus()}break;
+    case "rmppl":b.closest(".pplrow").remove();break;
+    case "savepeople":{
+      const full=pplForm();if(!full.length){toast("Añade al menos una persona");break}
+      b.disabled=true;b.textContent="Guardando…";
+      api("casa.people",{personas:full}).then(d=>{reload(d);toast("Guardado")}).catch(err=>{b.disabled=false;b.textContent="Guardar personas";fail(err)});
+      break}
+    case "tgsave":{
+      const tok=(($("#tgtoken")||{}).value||"").trim();
+      if(!tok){toast("Pega el token que te dio BotFather");break}
+      b.disabled=true;b.textContent="…";
+      api("casa.tgBot",{token:tok}).then(d=>{reload(d);toast("Bot guardado. Ahora pulsad Vincular.")}).catch(err=>{b.disabled=false;b.textContent="Guardar";fail(err)});
+      break}
+    case "tgchange":C.tgBot="";drawCasa();break;
+    case "tglink":{
+      const code=b.dataset.code,n=b.closest(".pplrow").querySelector(".pn").value.trim();
+      if(!code||!C.personasFull.find(p=>p.nombre===n)){toast("Pulsa antes «Guardar personas» y luego Vincular");break}
+      C.tgWait=true;window.open("https://t.me/"+encodeURIComponent(C.tgBot)+"?start="+encodeURIComponent(code),"_blank");break}
+    case "tgcheck":tgCheck(true);break;
+    case "tgunlink":{
+      if(!b.classList.contains("arm")){b.classList.add("arm");b.textContent="¿Desvincular?";setTimeout(()=>{if(b.isConnected){b.classList.remove("arm");b.textContent="Telegram ✔"}},3500);break}
+      const n=b.dataset.n;b.disabled=true;
+      api("casa.tgUnlink",{nombre:n}).then(d=>{reload(d);toast(n+" ya no recibe avisos")}).catch(err=>{b.disabled=false;fail(err)});break}
+    case "appurlsave":{
+      const u=(($("#appurl")||{}).value||"").trim();
+      if(!/^https:[/][/]/.test(u)){toast("Pega el enlace completo, empieza por https://");break}
+      api("casa.appUrl",{url:u}).then(d=>{reload(d);toast("Enlace guardado")}).catch(fail);break}
+    case "appurlchange":C.appUrl="";drawCasa();break;
+    case "appnewkeys":{
+      if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="¿Seguro? Toca otra vez: los enlaces de todos dejarán de valer";setTimeout(()=>{if(b.isConnected){b.dataset.arm="";b.textContent="Cambiar la clave de todos"}},4000);break}
+      b.disabled=true;b.textContent="Cambiando…";
+      api("casa.newKeys",{}).then(d=>{
+        /* En la app de GitHub, este móvil se queda con su clave nueva para no salirse */
+        try{if(d.miClave&&window.parent!==window&&window.parent.casaSetKey)window.parent.casaSetKey(d.miClave)}catch(e){}
+        reload(d);toast("Claves nuevas. Manda a cada uno su enlace nuevo.");
+      }).catch(err=>{b.disabled=false;b.textContent="Cambiar la clave de todos";fail(err)});
+      break}
+  }
+});
 draw(BOOT);
 window.__casaApply=function(data){draw({ok:true,data:data})};
 

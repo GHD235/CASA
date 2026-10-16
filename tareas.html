@@ -380,7 +380,7 @@ function render(){
   if(S.personas.length&&!S.personas.includes(S.me)){
     h+=`<section><div class="who-pick"><b>¿Quién eres en este móvil?</b><span>Así sabrá cuáles son tus tareas.</span><div class="seg">${S.personas.map(p=>`<button data-act="iam" data-p="${esc(p)}">${esc(p)}</button>`).join("")}</div></div></section>`;
   }else if(!S.personas.length){
-    h+=`<section><button class="hintbar" data-act="people"><b>Añade quién vive en casa</b> para poner responsable a cada tarea →</button></section>`;
+    h+=`<section><button class="hintbar" data-act="people"><b>Añade quién vive en casa</b> en ⚙️ del inicio para repartir las tareas →</button></section>`;
   }
 
   /* Tareas: todo lo que hay por hacer, en tarjetas */
@@ -570,27 +570,28 @@ function tick(){
 setInterval(tick,1000);
 
 /* ---------- configuración ---------- */
-function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;S.sheetOpen=true}
-function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";S.sheetOpen=false;render()}
+function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;S.sheetOpen=true;S.cfgOpen=false}
+function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";S.sheetOpen=false;S.cfgOpen=false;render()}
+/* Si se sale al inicio desde los ajustes, al volver no siguen abiertos */
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&S.cfgOpen&&S.sheetOpen)closeSheet()});
 $("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
 
 function openConfig(){
-  openSheet(`<h2>Ajustes</h2>
-    <div class="field people"><span class="flabel">Quién vive en casa</span>
-      <div id="pplrows">${(S.personasFull.length?S.personasFull:[{nombre:"",email:S.miEmail,chat:""},{nombre:"",email:"",chat:""}]).map(pplRow).join("")}</div>
-      <button type="button" class="btn ghost" data-act="addppl">+ Persona</button>
-      <div class="wahelp">${S.tgBot?`<b>Avisos por Telegram</b> · bot <b>@${esc(S.tgBot)}</b><br>Cada uno, desde su móvil, pulsa <b>Vincular</b> junto a su nombre: se abre Telegram, pulsa <b>Iniciar</b> y vuelve aquí. ${(()=>{const f=S.personasFull.filter(p=>!p.chat&&p.code);return f.length?`<br>Falta por vincular (mándale su enlace, o que escriba al bot su código):${f.map(p=>`<br>· ${esc(p.nombre)}: <b>/start ${esc(p.code)}</b> <a class="lnk" href="${esc(waLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`).join("")}`:""})()}<br><button type="button" class="lnk" data-act="tgcheck">Comprobar</button> · <button type="button" class="lnk" data-act="tgchange">Cambiar bot</button>`:tgSetup()}</div>
-      <div class="wahelp">${appBox()}</div>
-      <span class="flabel" style="margin-top:6px">Avisos del temporizador para</span>
+  const homeHref=$(".subbar a").getAttribute("href");
+  openSheet(`<h2>Ajustes de Tareas</h2>
+    <div class="wahelp" style="margin-bottom:14px">Quién vive en casa, el acceso de cada uno y Telegram están en <b>⚙️ del inicio</b>, porque sirven para todas las apps. <a class="lnk" href="${esc(homeHref)}" target="_top">Ir al inicio</a></div>
+    <div class="field">
+      <span class="flabel">Avisos del temporizador para</span>
       <div class="seg"><button type="button" data-act="amode" data-k="resp" aria-pressed="${S.avisoModo!=="todos"}">A quien le toca</button><button type="button" data-act="amode" data-k="todos" aria-pressed="${S.avisoModo==="todos"}">A todos</button></div>
       <span class="hint">Los avisos “al momento” (te toca, tareas nuevas) llegan en el acto. Los del temporizador, cuando termina.</span>
       <label class="aviso"><input type="checkbox" id="aviso" ${aviso()?"checked":""}><span>Mandar avisos desde este móvil</span></label>
       <button type="button" class="btn ghost" data-act="testaviso" style="margin-top:4px">Probar avisos</button>
-      <span class="hint">Manda un mensaje de prueba por Telegram a cada persona. Para desvincular a alguien, toca su «Telegram ✔» dos veces.</span>
-      <div class="actions" style="margin-top:4px"><span></span><button type="button" class="btn ghost" data-act="savepeople">Guardar ajustes</button></div>
+      <span class="hint">Manda un mensaje de prueba por Telegram a cada persona.</span>
       ${S.personas.length?`<span class="flabel" style="margin-top:6px">En este móvil soy</span><div class="seg">${S.personas.map(p=>`<button type="button" data-act="iam" data-p="${esc(p)}" aria-pressed="${S.me===p}">${esc(p)}</button>`).join("")}</div>`:""}
-    </div>`);
+    </div>
+    <div class="actions"><span></span><button type="button" class="btn ghost" data-act="close">Cerrar</button></div>`);
+  S.cfgOpen=true;
 }
 
 /* ---------- plantillas ---------- */
@@ -778,10 +779,11 @@ document.addEventListener("click",e=>{
     case "addzone":collect();draft.zones.push({name:"",resp:""});drawEditor();{const r=document.querySelectorAll(".zonerow .zn");r[r.length-1].focus()}break;
     case "rmzone":collect();draft.zones.splice(+b.dataset.k,1);if(!draft.zones.length)draft.zones=[{name:"",resp:""}];drawEditor();break;
     case "iam":S.me=b.dataset.p;lsSet("casa-yo",S.me);if(S.sheetOpen)openConfig();else render();toast("Hola, "+S.me);break;
-    case "people":openConfig();setTimeout(()=>{const i=$("#ppl");if(i)i.focus()},80);break;
+    case "people":$(".subbar a").click();break;
     case "addppl":$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:"",chat:""}));break;
     case "rmppl":b.closest(".pplrow").remove();break;
-    case "amode":document.querySelectorAll('[data-act="amode"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));break;
+    case "amode":{document.querySelectorAll('[data-act="amode"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+      const mode=b.dataset.k;run("casa.avisoModo",{modo:mode},()=>{S.avisoModo=mode},mode==="todos"?"Los avisos llegarán a todos":"Los avisos llegarán a quien le toca");break}
     case "savepeople":{
       const full=pplForm();
       const mode=amodeForm();
