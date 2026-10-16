@@ -54,6 +54,7 @@ iframe.app.on{visibility:visible;z-index:1}
 </div>
 <div class="loading" id="loading" hidden><div style="text-align:center"><span></span><br>Cargando la casa…</div></div>
 
+<script>window.CASA_VERSION="2026-10-16.5";</script>
 <script>
 (function(){
 "use strict";
@@ -129,7 +130,7 @@ function make(app){
   var f=document.createElement("iframe");
   f.className="app";f.title=app;f.setAttribute("allow","clipboard-read; clipboard-write; web-share");
   f.addEventListener("load",function(){f.ready=true;try{f.contentWindow.__casaShow(app===cur)}catch(e){}});
-  f.src=app+".html?v=2026-10-16.3";
+  f.src=app+".html?v=2026-10-16.5";
   document.body.appendChild(f);frames[app]=f;return f;
 }
 function show(app){

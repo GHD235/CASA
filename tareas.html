@@ -375,6 +375,13 @@ function dur(min){if(!min)return"";const h=Math.floor(min/60),m=Math.round(min%6
 function tplById(id){return S.tpls.find(t=>t.id===id)}
 /* Pasos de una tarea en marcha: su propia copia; las antiguas usan la plantilla */
 function runSteps(e){return e.steps&&e.steps.length?e.steps:((tplById(e.tplId)||{}).steps||[])}
+/* Qué ha pasado con el aviso de Telegram de "¿Puedes?" */
+function tgRes(d,base){
+  if(!d||!d.sinTG)return base;
+  const ok=d.avisados||[],sin=d.sinTG||[];
+  if(!ok.length&&!sin.length)return base;
+  return base+(ok.length?" · avisado: "+ok.join(", "):"")+(sin.length?" · sin Telegram: "+sin.join(", "):"");
+}
 function aviso(){try{return localStorage.getItem("casa-aviso")!=="0"}catch(e){return true}}
 
 /* ---------- vista principal ---------- */
@@ -853,7 +860,7 @@ document.addEventListener("click",e=>{
       break}
     case "filt":S.filter=b.dataset.k;render();break;
     case "puedo":{const x=S.act.find(t=>t.id===b.dataset.id);if(!x)break;
-      run("casa.puedo",{id:x.id,puede:true},()=>{x.ok=(x.ok||[]).filter(n=>n!==S.me).concat(S.me)},d=>"Apuntado: puedes"+(d&&d.avisados&&d.avisados.length?" · avisado por Telegram":""));break}
+      run("casa.puedo",{id:x.id,puede:true},()=>{x.ok=(x.ok||[]).filter(n=>n!==S.me).concat(S.me)},d=>tgRes(d,"Apuntado: puedes"));break}
     case "nopuedo":{const x=S.act.find(t=>t.id===b.dataset.id);if(!x)break;
       const rest=canGroup(x).filter(n=>n!==S.me);
       if(S.personas.length<2){toast("Añade a más personas en ⚙️ del inicio para poder pasarla");break}
@@ -867,7 +874,7 @@ document.addEventListener("click",e=>{
       run("casa.puedo",{id:x.id,puede:false,resp:r},()=>{x.ok=(x.ok||[]).filter(n=>n!==S.me);
         if(nextStep){x.steps=runSteps(x).map(s=>Object.assign({},s));if(x.steps[x.step+1])x.steps[x.step+1].resp=r}
         else{x.resp=r;if(x.steps&&x.steps[x.step])x.steps[x.step].resp=r}},
-        d=>"Ahora le toca a "+rLabel(r)+(d&&d.avisados&&d.avisados.length?" · avisado por Telegram":""));
+        d=>tgRes(d,"Ahora le toca a "+rLabel(r)));
       break}
     case "assign":{
       e.preventDefault();e.stopPropagation();

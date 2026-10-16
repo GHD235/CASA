@@ -262,6 +262,7 @@ function openCasa(){
 }
 function tgSetup(){return `<b>Avisos por Telegram</b>: primero cread vuestro bot (una vez, 2 minutos):<br>1. En Telegram busca <b>@BotFather</b> y pulsa <b>Iniciar</b>.<br>2. Mándale <b>/newbot</b>. Te pide un nombre (por ejemplo <i>Tareas de casa</i>) y un usuario que acabe en <b>bot</b>.<br>3. Te contesta con un <b>token</b>, algo como <i>123456789:AAH…</i>. Cópialo entero y pégalo aquí:<div class="tgrow"><input id="tgtoken" placeholder="Token del bot" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="tgsave">Guardar</button></div>`}
 function waLink(p){const url="https://t.me/"+C.tgBot+"?start="+p.code;return "https://wa.me/?text="+encodeURIComponent("Hola "+p.nombre+" 👋 Para recibir los avisos de Tareas de casa, abre este enlace y pulsa Iniciar: "+url)}
+function appVer(){try{return window.parent!==window&&window.parent.CASA_VERSION||""}catch(e){return""}}
 function appLink(p){return C.appUrl+"#k="+p.clave}
 function appBox(){
   const ps=C.personasFull.filter(p=>p.clave);
@@ -270,7 +271,7 @@ function appBox(){
     <div class="acclist">${ps.map(p=>`<div class="accrow"><span>${esc(p.nombre)}</span><a class="accbtn" href="https://wa.me/?text=${encodeURIComponent("Hola "+p.nombre+" 👋 Esta es tu app de casa. Ábrela desde este enlace (solo la primera vez) y añádela a la pantalla de inicio: "+appLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a></div>`).join("")}</div>
     <button type="button" class="btn danger wide" data-act="appnewkeys">Cambiar la clave de todos</button>
     <span class="hint">Úsalo si algún enlace ha llegado a quien no debía: los enlaces viejos dejan de funcionar y hay que mandar los nuevos a cada uno.</span>
-    <div class="accfoot">Dirección de la app: <a class="lnk" href="${esc(C.appUrl)}" target="_blank" rel="noopener">${esc(C.appUrl.replace(/^https:[/][/]/,""))}</a> · <button type="button" class="lnk" data-act="appurlchange">cambiar</button></div>`;
+    <div class="accfoot">Dirección de la app: <a class="lnk" href="${esc(C.appUrl)}" target="_blank" rel="noopener">${esc(C.appUrl.replace(/^https:[/][/]/,""))}</a> · <button type="button" class="lnk" data-act="appurlchange">cambiar</button>${appVer()?`<br>Versión en este dispositivo: <b>${esc(appVer())}</b>`:""}</div>`;
 }
 function tgBox(){
   if(!C.tgBot)return tgSetup();

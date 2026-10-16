@@ -296,10 +296,66 @@ const WEB={q:"",t:"",res:null,busy:false,err:false,added:{}};
 const webCache={};
 let webTimer=0;
 function infoOf(r){return [r.year,r.info].filter(Boolean).join(" · ")}
-function webSearch(q,tipo){
+/* Se busca directamente desde el móvil (sin pasar por Google), cada fuente a la vez,
+   y se pinta lo que va llegando. Si una fuente falla, esa parte la busca el servidor. */
+const WTYPES=["peli","serie","libro","juego"];
+const https=u=>String(u||"").replace(/^http:/,"https:");
+const anio=s=>{const m=String(s||"").match(/(1[89]|20)\d\d/);return m?m[0]:""};
+function getJSON(url,ms){
+  const c=window.AbortController?new AbortController():null,t=setTimeout(()=>c&&c.abort(),ms||6000);
+  return fetch(url,c?{signal:c.signal}:{}).then(r=>{if(!r.ok)throw new Error("http "+r.status);return r.json()}).finally(()=>clearTimeout(t));
+}
+let jpN=0;
+function jsonp(url,ms){
+  return new Promise((res,rej)=>{
+    const cb="__ocioJP"+(++jpN),sc=document.createElement("script");
+    const done=()=>{clearTimeout(t);try{delete window[cb]}catch(e){window[cb]=undefined}sc.remove()};
+    const t=setTimeout(()=>{done();rej(new Error("tiempo"))},ms||6000);
+    window[cb]=d=>{done();res(d)};
+    sc.onerror=()=>{done();rej(new Error("red"))};
+    sc.src=url+"&callback="+cb;document.head.appendChild(sc);
+  });
+}
+const E=encodeURIComponent;
+function wikiUrl(q,extra){return "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrlimit=6&prop=pageimages%7Cdescription&piprop=thumbnail&pithumbsize=300&pilicense=any&gsrsearch="+E(q+" "+extra)}
+function wikiList(j,tipo,re){
+  const ps=j&&j.query&&j.query.pages?Object.values(j.query.pages):[];
+  return ps.sort((a,b)=>(a.index||0)-(b.index||0)).filter(p=>re.test(p.description||"")||re.test(p.title||"")).map(p=>{
+    const d=String(p.description||""),by=d.match(/(?:by|from) (.+)$/);
+    return {title:String(p.title||"").replace(/\s*\((?:\d{4} )?(?:video game|film|American film)\)$/i,""),year:anio(d)||anio(p.title),info:tipo==="peli"&&by?by[1]:"",cover:p.thumbnail?https(p.thumbnail.source):""}});
+}
+const SRC={
+  peli:async q=>{
+    let a=null,b=null;
+    try{const j=await jsonp("https://itunes.apple.com/search?country=es&lang=es_es&media=movie&entity=movie&limit=6&term="+E(q));
+      a=(j.results||[]).map(r=>({title:r.trackName||"",year:anio(r.releaseDate),info:r.artistName||r.primaryGenreName||"",cover:https(String(r.artworkUrl100||"").replace(/100x100bb/,"300x450bb"))}))}catch(e){}
+    if(!a||a.length<2){try{b=wikiList(await getJSON(wikiUrl(q,"film")),"peli",/film/i)}catch(e){}}
+    if(!a&&!(b&&b.length))throw new Error("sin Apple");   // que lo busque el servidor
+    return (a||[]).concat(b||[]);
+  },
+  serie:async q=>(await getJSON("https://api.tvmaze.com/search/shows?q="+E(q))).map(x=>{const s=x.show||{};
+    return {title:s.name||"",year:anio(s.premiered),info:(s.webChannel&&s.webChannel.name)||(s.network&&s.network.name)||"",cover:https(s.image&&(s.image.medium||s.image.original))}}),
+  libro:async q=>{
+    let a=null;
+    try{const j=await getJSON("https://www.googleapis.com/books/v1/volumes?printType=books&maxResults=6&q="+E(q));
+      a=(j.items||[]).map(x=>{const v=x.volumeInfo||{},il=v.imageLinks||{};return {title:v.title||"",year:anio(v.publishedDate),info:(v.authors||[]).slice(0,2).join(", "),cover:https(il.thumbnail||il.smallThumbnail).replace(/&edge=curl/,"")}})}catch(e){}
+    if(a&&a.length)return a;
+    try{const j=await getJSON("https://openlibrary.org/search.json?limit=6&fields=title,author_name,first_publish_year,cover_i&q="+E(q));
+      return (j.docs||[]).map(d=>({title:d.title||"",year:d.first_publish_year?String(d.first_publish_year):"",info:(d.author_name||[]).slice(0,2).join(", "),cover:d.cover_i?"https://covers.openlibrary.org/b/id/"+d.cover_i+"-M.jpg":""}))}
+    catch(e){if(a)return a;throw e}
+  },
+  juego:async q=>wikiList(await getJSON(wikiUrl(q,"video game")),"juego",/video game/i)
+};
+function tidy(list,t,max){const seen={},out=[];(list||[]).forEach(x=>{const k=(x.title+"|"+x.year).toLowerCase();if(!x.title||seen[k]||out.length>=max)return;seen[k]=1;out.push(Object.assign({},x,{type:t}))});return out}
+function webSearch(q,tipo,onPart){
   const k=tipo+"|"+q.toLowerCase();
   if(webCache[k])return Promise.resolve(webCache[k]);
-  return api("ocio.buscar",{q,tipo}).then(r=>{webCache[k]=r||[];return webCache[k]});
+  const tipos=WTYPES.filter(t=>tipo==="all"||!tipo||t===tipo),max=tipos.length>1?4:8,parts={};
+  const all=()=>tipos.reduce((a,t)=>a.concat(parts[t]||[]),[]);
+  let fails=0;
+  return Promise.all(tipos.map(t=>
+    SRC[t](q).catch(()=>api("ocio.buscar",{q,tipo:t})).then(l=>{parts[t]=tidy(l,t,max);if(onPart)onPart(all())},()=>{fails++;parts[t]=[]})
+  )).then(()=>{if(fails===tipos.length)throw new Error("sin conexión");webCache[k]=all();return webCache[k]});
 }
 function inList(r){const t=(r.title||"").trim().toLowerCase();return Object.values(st.items).find(i=>i.type===r.type&&(i.title||"").trim().toLowerCase()===t)}
 function scheduleWeb(){
@@ -308,11 +364,13 @@ function scheduleWeb(){
   if(q.length<2){WEB.q="";WEB.res=null;renderWeb();return}
   const tipo=st.type;
   if(WEB.q===q&&WEB.t===tipo&&WEB.res)return;
-  WEB.busy=true;WEB.err=false;renderWeb();
+  WEB.busy=true;WEB.err=false;WEB.res=null;renderWeb();
   webTimer=setTimeout(()=>{
-    webSearch(q,tipo).then(r=>{if(st.q.trim()!==q||st.type!==tipo)return;WEB.q=q;WEB.t=tipo;WEB.res=r;WEB.busy=false;renderWeb()})
-      .catch(()=>{if(st.q.trim()!==q)return;WEB.busy=false;WEB.err=true;WEB.res=null;renderWeb()});
-  },600);
+    const same=()=>st.q.trim()===q&&st.type===tipo;
+    webSearch(q,tipo,part=>{if(same()){WEB.res=part;renderWeb()}})
+      .then(r=>{if(!same())return;WEB.q=q;WEB.t=tipo;WEB.res=r;WEB.busy=false;renderWeb()})
+      .catch(()=>{if(!same())return;WEB.busy=false;WEB.err=true;WEB.res=null;renderWeb()});
+  },350);
 }
 function renderWeb(){
   const box=$("#web"),q=st.q.trim();
@@ -410,7 +468,7 @@ function suggest(){
       sugList=(r||[]).slice(0,4);
       b.innerHTML=sugList.length?`<span class="sugnote">${isEdit?"Portadas de internet: toca la buena":"¿Es alguno de estos? Toca para completar"}</span>`+sugList.map((x,k)=>`<button type="button" class="sug" data-act="fsug" data-k="${k}">${coverTag({photo:x.cover,title:x.title},80)}<span><b>${esc(x.title)}</b><small>${esc(infoOf(x))}</small></span></button>`).join(""):"";
     }).catch(()=>{});
-  },650);
+  },400);
 }
 function openRate(id){
   const i=st.items[id];

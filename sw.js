@@ -1,6 +1,6 @@
 /* Apps casa · guarda las pantallas en el móvil para que abran al momento.
    Los datos (la hoja) nunca pasan por aquí: siempre van directos a Google. */
-const V = 'casa-2026-10-16.3';
+const V = 'casa-2026-10-16.5';
 const FILES = ['./', 'index.html', 'inicio.html', 'menu.html', 'ocio.html', 'tareas.html', 'config.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-48.png'];
 
