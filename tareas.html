@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* Apps casa · versión GitHub: esta página vive dentro de index.html, que guarda la clave y habla con la hoja. */
+(function(){
+  var P=window.parent;
+  if(P===window||!P.casaApi){location.replace("./#tareas");return}
+  /* google.script.run -> API con clave */
+  function R(){this.s=null;this.f=null}
+  R.prototype.withSuccessHandler=function(f){this.s=f;return this};
+  R.prototype.withFailureHandler=function(f){this.f=f;return this};
+  R.prototype.api=function(b){var s=this.s,f=this.f;P.casaApi(b).then(function(r){if(s)s(r)},function(e){if(f)f(e)})};
+  var g={script:{}};Object.defineProperty(g.script,"run",{get:function(){return new R()}});window.google=g;
+  /* Solo cuenta como "visible" la app que está en pantalla (así las ocultas no consultan la hoja) */
+  var shown=false;
+  function vis(){return shown&&P.document.visibilityState==="visible"?"visible":"hidden"}
+  Object.defineProperty(document,"visibilityState",{configurable:true,get:vis});
+  Object.defineProperty(document,"hidden",{configurable:true,get:function(){return vis()!=="visible"}});
+  window.__casaShow=function(v){var was=vis();shown=!!v;if(vis()!==was)document.dispatchEvent(new Event("visibilitychange"))};
+  P.document.addEventListener("visibilitychange",function(){if(shown)document.dispatchEvent(new Event("visibilitychange"))});
+  /* Enlaces entre apps: cambian de pantalla sin recargar */
+  document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#casa:"]');if(a){e.preventDefault();e.stopPropagation();P.casaNav(a.getAttribute("href").slice(6))}},true);
+})();
+</script>
+<script>
+/* Si algo falla, se muestra en pantalla en vez de quedarse "cargando". */
+window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d){d=document.createElement("div");d.id="jserr";d.setAttribute("role","alert");d.style.cssText="position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#B3261E;color:#fff;padding:10px 12px;border-radius:12px;font:13px/1.4 system-ui,sans-serif";(document.body||document.documentElement).appendChild(d)}d.textContent="Error en la app: "+m+(l?" (línea "+l+")":"")+". Haz una captura y pásamela.";}catch(e){}};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: app de móvil en una columna — En marcha (cuentas atrás), Pendientes (hoy y atrasadas), Poner en marcha (cuadrados), Hecho. Configuración en hoja inferior. */
+:root{
+  --bg:#EDF3F3; --surface:#FFFFFF; --ink:#16232A; --muted:#5B6B72; --line:#D5E0E2; --soft:#DDEEEF;
+  --accent:#0E7C86; --accent-ink:#FFFFFF; --late:#C62828; --late-soft:#FDE7E7; --ready:#1F8A4C; --ready-soft:#DDF3E5;
+  --danger:#B3261E; --shadow:0 10px 30px rgba(22,35,42,.14);
+  --p1:#7C3AED; --p2:#DB2777; --p3:#2563EB; --p4:#CA8A04;
+  --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0F1618; --surface:#172124; --ink:#E5EEF0; --muted:#97A8AE; --line:#263437; --soft:#1B2E31;
+  --accent:#4FC3C9; --accent-ink:#0B1516; --late:#FF7A70; --late-soft:#3A1C1C; --ready:#5BD18C; --ready-soft:#17301F;
+  --danger:#F2867E; --shadow:0 10px 30px rgba(0,0,0,.45); color-scheme:dark;
+  --p1:#B79CFF; --p2:#F48FC0; --p3:#8AB4FF; --p4:#F2C94C}}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+body{font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+
+.wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:14px 60px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.brand{font-family:var(--f-display);font-weight:800;font-size:1.65rem;letter-spacing:-.02em;line-height:1.05;margin:0}
+.brand small{display:block;font-family:var(--f-body);font-weight:600;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.iconbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.topbtns{display:flex;gap:8px}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick button{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:6px 11px;font-size:.82rem;font-weight:600;color:var(--ink)}
+.pick button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pick button.all{border-style:dashed;color:var(--muted)}
+.pick.missing{outline:2px solid var(--late);outline-offset:4px;border-radius:12px}
+.steprow .pick{grid-column:2/3}
+.zonerow .pick{grid-column:1/-1;margin:2px 0 8px}
+.sched{color:var(--muted);font-weight:500}
+#onewhen{grid-column:auto}
+.savetpl{display:flex;gap:10px;align-items:center;font-size:.86rem;color:var(--muted);margin:4px 0 2px}
+.savetpl input{width:20px;height:20px;padding:0;accent-color:var(--accent);flex:none}
+.choose{display:grid;gap:8px;margin-bottom:6px}
+.subbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:.8rem;color:var(--muted)}
+.subbar a{color:var(--accent);font-weight:700;text-decoration:none}
+.sync::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ready);margin-right:6px;vertical-align:1px}
+.sync.busy::before{background:var(--late)}
+.sync.err::before{background:var(--danger)}
+
+section{margin-top:22px}
+.sh{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px}
+.sh h2{margin:0;font-size:.74rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sh span{font-size:.78rem;color:var(--muted)}
+
+/* En marcha */
+.runs{display:grid;gap:10px}
+.run{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 14px 12px}
+.run.ready{border-color:var(--ready);box-shadow:0 0 0 1px var(--ready) inset;background:linear-gradient(var(--ready-soft),var(--surface) 70%)}
+.run-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.run-h h3{margin:0;font-family:var(--f-display);font-weight:800;font-size:1.15rem}
+.run-h .who{font-size:.75rem;color:var(--muted)}
+.now{margin-top:2px;font-weight:600;color:var(--muted)}
+.run.ready .now{color:var(--ready)}
+.clock{font-family:var(--f-mono);font-weight:700;font-size:2.4rem;letter-spacing:-.02em;line-height:1.1;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.ends{font-size:.8rem;color:var(--muted)}
+.bar{height:6px;border-radius:99px;background:var(--soft);overflow:hidden;margin:10px 0}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.steps{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 10px}
+.steps span{font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--muted)}
+.steps span.done{text-decoration:line-through;opacity:.6}
+.steps span.cur{background:var(--accent);color:var(--accent-ink)}
+.run-a{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+
+/* Pendientes */
+.list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.grp{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 14px 4px}
+.grp.late{color:var(--late)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);cursor:pointer}
+.grp+.row{border-top:0}
+.row input{width:22px;height:22px;accent-color:var(--ready);flex:none}
+.row .txt{flex:1;min-width:0}
+.row .txt b{display:block;font-weight:600;overflow-wrap:anywhere}
+.row .txt small{color:var(--muted);font-size:.78rem}
+.run.late{border-color:var(--late);box-shadow:0 0 0 1px var(--late) inset;background:linear-gradient(var(--late-soft),var(--surface) 70%)}
+.run.late .now{color:var(--late)}
+.latebar{display:inline-block;margin-bottom:6px;font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--surface);background:var(--late);padding:3px 8px;border-radius:99px}
+.row.late{background:var(--late-soft)}
+.row.late .txt b{color:var(--late)}
+.late-chip{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--late-soft);color:var(--late);white-space:nowrap}
+.addrow{display:flex;gap:8px;margin-top:10px}
+.addrow input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 12px}
+.nextclean{font-size:.82rem;color:var(--muted);margin:8px 2px 0}
+.calm{background:var(--surface);border:1px dashed var(--line);border-radius:16px;padding:16px;color:var(--muted);text-align:center;font-size:.9rem}
+
+/* Poner en marcha */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.tile{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;min-height:118px;padding:14px;border-radius:18px;border:1px solid var(--line);background:var(--surface)}
+.tile .tmain{all:unset;display:flex;flex-direction:column;gap:8px;flex:1;cursor:pointer;padding-right:26px}
+.tile .tmain:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px}
+.tile .tedit{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center}
+.tile .tedit svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8}
+.tile.rut .ini{color:var(--late)}
+.newbtn{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:2px 8px;width:100%;margin-top:12px;padding:14px;border:1px dashed var(--accent);border-radius:16px;background:transparent;color:var(--accent);font-weight:800;font-size:1rem}
+.newbtn span{font-size:1.3rem;line-height:1}
+.newbtn small{flex-basis:100%;text-align:center;font-weight:500;font-size:.78rem;color:var(--muted)}
+.newbtn+.newbtn{margin-top:8px}
+.replist{display:grid;gap:8px}
+.rep{display:flex;gap:8px;align-items:stretch}
+.repgo{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;column-gap:10px;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px}
+.repgo b{font-weight:700}
+.repgo small{grid-column:1;color:var(--muted);font-size:.78rem}
+.repgo span{grid-column:2;grid-row:1/3;align-self:center;font-weight:800;color:var(--accent);font-size:.85rem}
+.rep .tedit{position:static;width:44px;height:auto;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--muted);display:grid;place-items:center}
+.rep .tedit svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8}
+.newtile{border-style:dashed;border-color:var(--accent);background:transparent;color:var(--accent);cursor:pointer}
+.newtile .plus{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;border:1px dashed var(--accent);font-size:1.4rem;font-weight:700}
+.newtile small{color:var(--muted)}
+.tile:active{transform:scale(.98)}
+@media (prefers-reduced-motion:reduce){.tile:active{transform:none}}
+.tile .ini{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--soft);color:var(--accent);font-family:var(--f-display);font-weight:800;font-size:1.1rem}
+.tile b{font-weight:700;line-height:1.2}
+.tile small{color:var(--muted);font-size:.76rem;margin-top:auto}
+.tile .on{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.aviso{display:flex;gap:10px;align-items:flex-start;margin-top:10px;font-size:.84rem;color:var(--muted)}
+.aviso input,.field .aviso input{width:20px;height:20px;padding:0;accent-color:var(--accent);flex:none;margin-top:1px}
+
+/* Hecho */
+.done-list{display:grid;gap:4px}
+.done-row{display:flex;gap:8px;font-size:.85rem;color:var(--muted);align-items:center}
+.link-row{width:100%;text-align:left;border:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;color:var(--muted)}
+.link-row em{font-style:normal;font-weight:700;color:var(--accent);font-size:.78rem;white-space:nowrap}
+.done-list{gap:6px}
+.done-row s{flex:1;min-width:0;overflow-wrap:anywhere}
+.done-row span{white-space:nowrap;font-variant-numeric:tabular-nums}
+
+.btn{border:0;border-radius:12px;padding:10px 16px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+.btn.go{background:var(--ready);color:var(--accent-ink)}
+.btn.ghost{background:var(--soft);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid currentColor}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.link{border:0;background:none;color:var(--muted);font-size:.82rem;text-decoration:underline;padding:6px 2px}
+
+/* Hojas */
+.backdrop{position:fixed;inset:0;background:rgba(8,14,16,.5);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;max-height:90%;overflow:auto;border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow);animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 12px}
+.sheet h2{font-family:var(--f-display);margin:0 0 12px;font-size:1.3rem}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.flabel{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.field input,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.field .hint{font-size:.78rem;color:var(--muted)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 12px;font-weight:600;font-size:.88rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.days button{width:42px;padding:8px 0;text-align:center}
+.steprow{display:grid;grid-template-columns:24px 1fr 30px;gap:6px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.stepopts{grid-column:2/3;display:grid;grid-template-columns:1fr 80px;gap:6px}
+.stepopts .sv[hidden]{display:none!important}
+.stepopts:has(.sv[hidden]){grid-template-columns:1fr}
+.stepopts select,.stepopts input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px;min-width:0;width:100%;font-size:.88rem}
+#addone{flex-wrap:wrap}
+#addone input{flex:1 1 100%}
+#addone select{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:10px 8px}
+.steprow .n{font-family:var(--f-mono);font-size:.8rem;color:var(--muted);text-align:center}
+.steprow input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 10px;min-width:0;width:100%}
+.steprow .rm{border:0;background:none;color:var(--muted);font-size:1.2rem}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.presets button{border:1px dashed var(--accent);background:none;color:var(--accent);border-radius:99px;padding:5px 11px;font-size:.82rem;font-weight:600}
+.tpl-list{display:grid;gap:6px;margin-bottom:12px}
+.tpl-list button{display:flex;justify-content:space-between;gap:8px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:11px 12px}
+.tpl-list b{font-weight:700}
+.tpl-list small{color:var(--muted);font-size:.78rem}
+.actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
+/* Responsables */
+.resp{display:inline-flex;align-items:center;gap:5px;flex:none;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 9px 3px 3px;font-size:.75rem;font-weight:700;color:var(--pc);max-width:46%}
+.resp i{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--pc);color:var(--surface);font-style:normal;font-size:.7rem}
+.resp.none{color:var(--muted);font-weight:600;padding:4px 10px;border-style:dashed}
+.late-txt{color:var(--late);font-weight:600}
+.who-pick{display:grid;gap:8px;padding:14px;border-radius:16px;background:var(--surface);border:1px solid var(--accent)}
+.who-pick span{color:var(--muted);font-size:.85rem;margin-top:-6px}
+.hintbar{display:block;width:100%;text-align:left;padding:11px 14px;border:1px dashed var(--accent);border-radius:14px;background:var(--soft);color:var(--ink);font-size:.88rem}
+.hintbar b{color:var(--accent)}
+.seg.filt{margin-bottom:8px}
+.seg.filt button{padding:6px 14px;border-radius:99px}
+.zonerow{display:grid;grid-template-columns:1fr 30px;gap:6px;align-items:center;margin-bottom:6px}
+.zonerow.nop{grid-template-columns:1fr 30px}
+.zonerow input,.zonerow select{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 10px;min-width:0;width:100%}
+.zonerow .rm{border:0;background:none;color:var(--muted);font-size:1.2rem}
+.testrow{display:grid;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg)}
+.testrow small{color:var(--muted)}
+.testrow span{font-size:.85rem;font-weight:600;color:var(--ready)}
+.testrow.falta span,.testrow.sinbot span{color:var(--late)}
+.testrow.error span{color:var(--danger)}
+.pplrow{display:grid;grid-template-columns:minmax(0,1fr) auto 30px;gap:6px;align-items:center;margin-bottom:8px}
+.pplrow .tgok{font-size:.8rem;font-weight:600;color:var(--ready);padding:6px 4px;white-space:nowrap;border:0;background:none}
+.pplrow .tgok.arm{color:var(--danger)}
+.pplrow .tglink{border:1px solid var(--accent);color:var(--accent);background:none;border-radius:10px;padding:8px 10px;font-size:.82rem;font-weight:600;white-space:nowrap}
+.wahelp .tgrow{display:flex;gap:6px;margin-top:8px}
+.wahelp .tgrow input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 10px}
+.wahelp .lnk{border:0;background:none;color:var(--accent);padding:0;font:inherit;text-decoration:underline}
+.wahelp{font-size:.82rem;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:2px 0 8px;line-height:1.45}
+.wahelp b{color:var(--ink,inherit)}
+.wahelp a{color:var(--accent)}
+.pplrow input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 10px;min-width:0;width:100%}
+.pplrow .rm{border:0;background:none;color:var(--muted);font-size:1.2rem}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
+.loading{color:var(--muted);text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand"><small id="today">Hoy</small>Tareas de casa</h1>
+    <div class="topbtns"><button class="iconbtn" data-act="tpls" aria-label="Plantillas"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></button>
+    <button class="iconbtn" data-act="config" aria-label="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
+  </div>
+  </header>
+  <div class="subbar"><a href="#casa:inicio" target="_top">← Todas las apps</a><span class="sync" id="sync">Al día</span></div>
+
+  <div id="app"><p class="loading">Cargando tareas…</p></div>
+</div>
+<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+window.BOOT = (window.parent!==window&&window.parent.casaBoot)?window.parent.casaBoot("tareas"):null;
+</script>
+<script>
+(function(){
+"use strict";
+var BOOT=window.BOOT||null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));
+const DIAS=["lunes","martes","miércoles","jueves","viernes","sábado","domingo"];
+const DCORTO=["L","M","X","J","V","S","D"];
+const DABR=["dom","lun","mar","mié","jue","vie","sáb"];
+const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+const S={ready:false,tpls:[],act:[],done:[],personas:[],offset:0,hoy:"",yo:"",pending:0,syncErr:false,sheetOpen:false,filter:"todas"};
+function lsGet(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+S.me=lsGet("casa-yo","");S.filter=lsGet("casa-filtro","todas");
+const yo=()=>S.me||S.yo;
+const PCOL=["var(--p1)","var(--p2)","var(--p3)","var(--p4)"];
+/* Responsables: uno o varios nombres separados por comas. Todo sale de la lista de personas de ⚙️. */
+const rList=r=>String(r||"").split(",").map(x=>x.trim()).filter(Boolean);
+const rHas=(r,n)=>!!n&&rList(r).includes(n);
+function rLabel(r){const l=rList(r);if(!l.length)return"";if(S.personas.length>1&&S.personas.every(p=>l.includes(p)))return"Todos";return l.map(n=>n===yo()?"tú":n).join(", ")}
+function pColor(n){const i=S.personas.indexOf(rList(n)[0]);return i<0?"var(--muted)":PCOL[i%PCOL.length]}
+function respChip(id,resp){
+  const label=rLabel(resp)||"Sin asignar",l=rList(resp);
+  return `<button type="button" class="resp${resp?"":" none"}" data-act="assign" data-id="${esc(id)}" style="--pc:${pColor(resp)}" aria-label="Le toca a: ${esc(label)}. Toca para cambiar">${l.length?`<i>${esc(l.length>1?String(l.length):l[0].charAt(0).toUpperCase())}</i>`:""}${esc(label)}</button>`;
+}
+/* Selector de personas: una, varias o todas. extra "turnos" para la limpieza por zonas. */
+function picker(sel,opts){
+  opts=opts||{};const l=sel==="turnos"?[]:rList(sel);
+  return `<div class="pick${opts.cls?" "+opts.cls:""}"${opts.id?` id="${opts.id}"`:""} role="group" aria-label="${esc(opts.label||"A quién le toca")}">${S.personas.map(p=>`<button type="button" data-act="pk" data-p="${esc(p)}" aria-pressed="${l.includes(p)}">${esc(p)}</button>`).join("")}${S.personas.length>1?`<button type="button" class="all" data-act="pkall">Todos</button>`:""}${opts.turnos?`<button type="button" data-act="pk" data-p="turnos" aria-pressed="${sel==="turnos"}">Por turnos</button>`:""}</div>`;
+}
+function pickVal(el){
+  if(!el)return"";const on=[...el.querySelectorAll('[data-act="pk"][aria-pressed="true"]')].map(b=>b.dataset.p);
+  return on.includes("turnos")?"turnos":on.join(", ");
+}
+const now=()=>Date.now()+S.offset;
+
+/* ---------- servidor ---------- */
+function api(action,payload){
+  return new Promise((res,rej)=>{
+    if(!(window.google&&google.script&&google.script.run)){rej({code:"sin_servidor"});return}
+    google.script.run
+      .withSuccessHandler(r=>r&&r.ok?res(r.data):rej({code:(r&&r.error)||"error"}))
+      .withFailureHandler(e=>rej({code:"red",message:e&&e.message}))
+      .api(Object.assign({action},payload||{}));
+  });
+}
+function setSync(){
+  const s=$("#sync");
+  if(S.pending>0){s.className="sync busy";s.textContent="Guardando…"}
+  else if(S.syncErr){s.className="sync err";s.textContent="Sin guardar · reintenta"}
+  else{s.className="sync";s.textContent="Al día"}
+}
+let toastT;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800)}
+function fail(e){const c=e&&e.code;
+  if(c==="sin_acceso")toast("Tu cuenta no tiene acceso a la hoja. Pide que te la compartan.");
+  else if(c==="red")toast("Sin conexión. No se ha guardado.");
+  else toast(String(c||"error"))}
+function apply(d){
+  S.tpls=d.plantillas||[];S.act=d.activas||[];S.done=d.hechas||[];S.personas=d.personas||[];S.personasFull=d.personasFull||S.personas.map(n=>({nombre:n,email:"",chat:""}));S.tgBot=d.tgBot||"";S.appUrl=d.appUrl||"";S.avisoModo=d.avisoModo||"resp";S.miEmail=d.miEmail||"";
+  S.offset=(d.now||Date.now())-Date.now();S.hoy=d.hoy||ymd(new Date());S.yo=d.yo||"";S.ready=true;render();
+}
+/* Cambio instantáneo en pantalla + guardado en el servidor, que devuelve el estado real. */
+function run(action,payload,optimistic,okMsg){
+  if(optimistic){optimistic();render()}
+  S.pending++;S.syncErr=false;setSync();
+  payload=Object.assign({yo:yo()},payload||{});
+  return api(action,payload).then(d=>{S.pending--;setSync();if(!S.pending)apply(d);if(okMsg)toast(okMsg)})
+    .catch(e=>{S.pending--;S.syncErr=true;setSync();fail(e);refresh(true)});
+}
+function refresh(force){
+  if(!force&&(S.pending||S.sheetOpen||document.visibilityState!=="visible"))return;
+  api("casa.load").then(d=>{if(!S.pending)apply(d)}).catch(()=>{});
+}
+
+/* ---------- utilidades ---------- */
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function parseYmd(s){const p=String(s).split("-").map(Number);return new Date(p[0],p[1]-1,p[2])}
+function shortDate(s){const d=parseYmd(s);return DABR[d.getDay()]+" "+d.getDate()}
+function clock(ms){
+  const t=Math.max(0,Math.ceil(ms/1000)),d=Math.floor(t/86400),h=Math.floor(t%86400/3600),m=Math.floor(t%3600/60),s=t%60;
+  if(d)return d+" d "+h+" h";
+  return (h?h+":"+String(m).padStart(2,"0"):String(m))+":"+String(s).padStart(2,"0");
+}
+/* Unidad de un paso: "ahora", "min" o "dias" (compatible con pasos antiguos que solo tenían minutos) */
+function unitOf(s){return s?(s.unit||(s.min?"min":"ahora")):"ahora"}
+function isTimed(s){const u=unitOf(s);return (u==="min"&&s.min>0)||(u==="dias"&&s.days>0)}
+function stepMins(s){const u=unitOf(s);return u==="dias"?(s.days||0)*1440:u==="min"?(s.min||0):0}
+function stepLabel(s){const u=unitOf(s);return u==="dias"?(s.days+(s.days==1?" día":" días")):u==="min"?dur(s.min):"ahora"}
+/* Fin estimado en el móvil (el servidor manda el definitivo): minutos, o las 9:00 dentro de N días */
+function endFor(s){const u=unitOf(s);if(u==="min"&&s.min)return now()+s.min*60000;if(u==="dias"&&s.days){const d=new Date();if(d.getHours()<6)d.setDate(d.getDate()-1);d.setDate(d.getDate()+Number(s.days));d.setHours(10,0,0,0);return d.getTime()+S.offset}return 0}
+function whenLabel(ms){
+  const d=new Date(ms-S.offset),t=new Date();const sameDay=d.toDateString()===t.toDateString();
+  const tm=new Date(t);tm.setDate(t.getDate()+1);
+  const day=sameDay?"":d.toDateString()===tm.toDateString()?"mañana ":DIAS[(d.getDay()+6)%7]+" "+d.getDate()+" ";
+  return day+"a las "+hhmm(ms);
+}
+function hhmm(ms){const d=new Date(ms-S.offset);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+function dur(min){if(!min)return"";const h=Math.floor(min/60),m=Math.round(min%60);return h?(h+" h"+(m?" "+m+" min":"")):m+" min"}
+function tplById(id){return S.tpls.find(t=>t.id===id)}
+/* Pasos de una tarea en marcha: su propia copia; las antiguas usan la plantilla */
+function runSteps(e){return e.steps&&e.steps.length?e.steps:((tplById(e.tplId)||{}).steps||[])}
+function aviso(){try{return localStorage.getItem("casa-aviso")!=="0"}catch(e){return true}}
+
+/* ---------- vista principal ---------- */
+function render(){
+  const d=new Date();
+  $("#today").textContent=DIAS[(d.getDay()+6)%7]+" "+d.getDate()+" "+MESES[d.getMonth()];
+  if(!S.ready)return;
+  let h="";
+  const rutinas=S.tpls.filter(t=>t.type==="rutina");
+
+  if(S.personas.length&&!S.personas.includes(S.me)){
+    h+=`<section><div class="who-pick"><b>¿Quién eres en este móvil?</b><span>Así sabrá cuáles son tus tareas.</span><div class="seg">${S.personas.map(p=>`<button data-act="iam" data-p="${esc(p)}">${esc(p)}</button>`).join("")}</div></div></section>`;
+  }else if(!S.personas.length){
+    h+=`<section><button class="hintbar" data-act="people"><b>Añade quién vive en casa</b> para poner responsable a cada tarea →</button></section>`;
+  }
+
+  /* Tareas: todo lo que hay por hacer, en tarjetas */
+  const canFilter=S.me&&S.personas.includes(S.me);
+  const onlyMine=canFilter&&S.filter==="mias";
+  const all=S.act.slice();
+  const mine=e=>rHas(cardResp(e),S.me);
+  const shown=(onlyMine?all.filter(mine):all).sort((x,y)=>prio(x)-prio(y)||(x.createdAt||0)-(y.createdAt||0));
+  const nMine=canFilter?all.filter(mine).length:0;
+  h+=`<section><div class="sh"><h2>Tareas</h2><span>${all.length?all.length+" por hacer"+(canFilter?" · "+nMine+(nMine===1?" tuya":" tuyas"):""):""}</span></div>`;
+  if(canFilter&&all.length)h+=`<div class="seg filt"><button data-act="filt" data-k="todas" aria-pressed="${!onlyMine}">Todas</button><button data-act="filt" data-k="mias" aria-pressed="${onlyMine}">Mías</button></div>`;
+  if(shown.length)h+=`<div class="runs">`+shown.map(e=>e.type==="ciclo"?runCard(e):itemCard(e)).join("")+`</div>`;
+  else h+=`<div class="calm">${onlyMine?"No tienes nada pendiente.":"Nada por hacer. Casa en orden."}</div>`;
+  h+=`<button class="newbtn" data-act="newmenu"><span>+</span> Nueva tarea<small>Desde cero o desde una plantilla</small></button>`;
+  h+=`<button class="newbtn" data-act="newquick"><span>+</span> Nueva tarea sencilla<small>Algo puntual: cambiar una bombilla, tirar la basura…</small></button>`;
+  const nx=nextClean(rutinas);
+  if(nx)h+=`<p class="nextclean">Próxima ${esc(nx.name.toLowerCase())}: <b>${nx.label}</b></p>`;
+  h+=`</section>`;
+
+  /* Hecho */
+  if(S.done.length){
+    h+=`<section><div class="sh"><h2>Hecho recientemente</h2></div><div class="done-list">`+S.done.map(e=>{
+      const label=e.zone?e.zone:e.name;
+      const inner=`<s>${esc(label)}</s><span>${e.who?esc(e.who===yo()?"tú":e.who)+" · ":""}${hhmm(e.doneAt)}</span>`;
+      return e.type==="ciclo"&&runSteps(e).length?`<button class="done-row link-row" data-act="again" data-id="${esc(e.id)}" aria-label="Repetir ${esc(e.name)}">${inner}<em>Repetir ›</em></button>`:`<div class="done-row">${inner}</div>`;
+    }).join("")+`</div></section>`;
+  }
+
+  $("#app").innerHTML=h;
+  tick();
+}
+
+/* Quién tiene que actuar ahora en una tarjeta */
+function cardResp(e){
+  if(e.type!=="ciclo")return e.resp||"";
+  const steps=runSteps(e);
+  if(e.endsAt&&e.endsAt<=now()&&steps[e.step+1])return stepResp(e,e.step+1);
+  return e.resp||"";
+}
+/* Orden: atrasadas, luego lo que hay que hacer ya, luego lo que está esperando un temporizador */
+function prio(e){
+  if(e.type!=="ciclo")return e.date&&e.date<S.hoy?0:e.endsAt&&e.endsAt>now()?2:1;
+  if(overdueSince(e))return 0;
+  return e.endsAt&&e.endsAt>now()?2:1;
+}
+function itemCard(e){
+  const t=tplById(e.tplId),late=!!(e.date&&e.date<S.hoy);
+  const title=e.type==="zona"?e.zone:e.name;
+  const sub=e.type==="zona"?(t?t.name:e.name):"Tarea suelta";
+  return `<article class="run ${late?"late":"ready"}">
+    ${late?`<div class="latebar">Sin hacer desde ${shortDate(e.date)}</div>`:""}
+    <div class="run-h"><h3>${esc(title)}</h3>${S.personas.length?respChip(e.id,e.resp):""}</div>
+    <div class="now">${esc(sub)}${e.endsAt&&e.endsAt>now()?` · <span class="sched">aviso ${esc(whenLabel(e.endsAt))}</span>`:""}</div>
+    <div class="run-a"><button class="btn go" data-act="doneitem" data-id="${esc(e.id)}">Hecho</button><button class="link" data-act="cancel" data-id="${esc(e.id)}" data-label="Borrar">Borrar</button></div>
+  </article>`;
+}
+
+/* Hoja "+ Nueva tarea": desde cero o desde una plantilla */
+function tplSum(t){const m=t.steps.reduce((a,s)=>a+(unitOf(s)==="min"?(s.min||0):0),0),dd=t.steps.reduce((a,s)=>a+(unitOf(s)==="dias"?(s.days||0):0),0);return [t.steps.map(s=>s.name).join(" → "),m?dur(m):"",dd?dd+(dd==1?" día":" días"):""].filter(Boolean).join(" · ")}
+function openNewMenu(){
+  const ciclos=S.tpls.filter(t=>t.type==="ciclo");
+  openSheet(`<h2>Nueva tarea</h2>
+    <div class="choose"><button class="btn" data-act="fresh">+ Nueva desde cero</button></div>
+    <p class="flabel" style="margin-top:18px">Desde una plantilla</p>
+    ${ciclos.length?`<div class="replist">${ciclos.map(t=>`<div class="rep"><button class="repgo" data-act="fromtpl" data-id="${esc(t.id)}"><b>${esc(t.name)}</b><small>${esc(tplSum(t))}</small><span>Usar</span></button></div>`).join("")}</div>`:`<p class="hint" style="font-size:.85rem;color:var(--muted)">Aún no hay plantillas. Créalas con el botón de plantillas, al lado de ⚙️.</p>`}
+    <p class="hint" style="font-size:.8rem;color:var(--muted);margin-top:10px">Antes de lanzarla eliges a quién le toca cada paso.</p>`);
+}
+/* Hoja "+ Nueva tarea sencilla": algo puntual, para quién, y aviso */
+function openQuick(){
+  openSheet(`<h2>Nueva tarea sencilla</h2>
+    <form id="addone">
+      <div class="field"><label class="flabel" for="onename">Qué hay que hacer</label><input id="onename" placeholder="Cambiar la bombilla del pasillo" autocomplete="off" required></div>
+      ${S.personas.length?`<div class="field"><span class="flabel">Para quién</span>${picker("",{id:"oneseg",label:"Para quién"})}</div>`:""}
+      <div class="field"><span class="flabel">Cuándo avisar</span><div class="stepopts" id="onewhen"><select class="su" aria-label="Cuándo avisar">${[["ahora","Ahora"],["min","Dentro de… minutos"],["dias","Dentro de… días"]].map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select><input class="sv" type="number" inputmode="numeric" min="1" placeholder="min" aria-label="Cantidad" hidden></div></div>
+      <div class="actions"><span></span><button class="btn" type="submit" id="onesubmit">Crear y avisar</button></div>
+    </form>`);
+  $("#addone").addEventListener("submit",ev=>{
+    ev.preventDefault();const v=$("#onename").value.trim();if(!v)return;
+    const r=pickVal($("#oneseg"));
+    if(S.personas.length&&!r){toast("Elige para quién es");$("#oneseg").classList.add("missing");return}
+    const u=$("#onewhen .su").value,n=Number(String($("#onewhen .sv").value||"").replace(",","."))||0;
+    if(u!=="ahora"&&!n){toast("Pon cuántos "+(u==="dias"?"días":"minutos"));$("#onewhen .sv").focus();return}
+    const cuando={unit:u,min:u==="min"?n:0,days:u==="dias"?n:0};
+    closeSheet();addQuick(v,r,cuando);
+  });
+  $("#addone").addEventListener("input",checkForms);$("#addone").addEventListener("change",checkForms);
+  checkQuick();
+  setTimeout(()=>{const i=$("#onename");if(i)i.focus()},80);
+}
+function addQuick(v,r,cuando){
+  const at=endFor(cuando||{}),d=at?new Date(at-S.offset):null;
+  const tmp={id:"tmp-"+uid(),name:v,type:"puntual",date:d?ymd(d):S.hoy,status:"activa",resp:r,endsAt:at,createdAt:now()};
+  return run("casa.addOne",{nombre:v,resp:r,aviso:aviso(),cuando},()=>S.act.push(tmp),aviso()?"Creada · aviso a "+(rLabel(r)||"todos")+(at?" "+whenLabel(at):""):"Creada").then(()=>{
+    if(!tmp.pendingDone)return;
+    const real=S.act.filter(e=>e.type==="puntual"&&e.name===v&&!String(e.id).startsWith("tmp-")).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
+    if(real)doneItem(real.id,true);
+  });
+}
+function doneItem(id,silent){
+  const x=S.act.find(e=>e.id===id);
+  const opt=()=>{S.act=S.act.filter(e=>e.id!==id);if(x)S.done.unshift(Object.assign({},x,{status:"hecha",doneAt:now(),who:yo()}))};
+  if(String(id).startsWith("tmp-")){if(x){x.pendingDone=true;opt();render()}return}
+  run("casa.done",{id},silent?null:opt);
+}
+
+function stepInfo(e){
+  const t=tplById(e.tplId),steps=runSteps(e);
+  const cur=steps[e.step]||{name:e.name,min:0},next=steps[e.step+1];
+  const timed=!!e.endsAt,left=e.endsAt-now(),ready=timed&&left<=0;
+  return {t,steps,cur,next,timed,left,ready};
+}
+function stepResp(e,k){
+  const s=runSteps(e)[k];if(!s)return"";
+  return s.resp||e.starter||e.who||"";
+}
+const DAY=86400000;
+function overdueSince(e){
+  if(e.endsAt)return now()-e.endsAt>DAY?e.endsAt:0;
+  return e.since&&now()-e.since>DAY?e.since:0;
+}
+function agoLabel(ms){const d=Math.floor((now()-ms)/DAY);return d<=1?"desde ayer":"desde hace "+d+" días"}
+function runCard(e){
+  const i=stepInfo(e);
+  let label,btn;
+  if(i.timed&&!i.ready){
+    const nr=i.next?stepResp(e,e.step+1):"";
+    label=i.cur.name+(i.next&&nr&&S.personas.length?" · luego "+i.next.name.toLowerCase()+": "+rLabel(nr):"");
+    btn=`<button class="btn ghost" data-act="next" data-id="${esc(e.id)}" data-n="1">Ya ha terminado</button>`;
+  }else if(i.ready){
+    const nr=i.next?stepResp(e,e.step+1):"";
+    label=i.next?"¡Listo! Ahora: "+i.next.name+(nr&&S.personas.length?" · le toca a "+(rLabel(nr)==="tú"?"ti":rLabel(nr)):""):"¡Terminado!";
+    btn=i.next
+      ?(isTimed(i.next)?`<button class="btn go" data-act="next" data-id="${esc(e.id)}" data-n="1">Empezar: ${esc(i.next.name)}</button>`
+                  :`<button class="btn go" data-act="next" data-id="${esc(e.id)}" data-n="2">Hecho: ${esc(i.next.name)}</button>`)
+      :`<button class="btn go" data-act="next" data-id="${esc(e.id)}" data-n="1">Hecho</button>`;
+  }else{
+    label="Ahora: "+i.cur.name;
+    btn=`<button class="btn go" data-act="next" data-id="${esc(e.id)}" data-n="1">Hecho: ${esc(i.cur.name)}</button>`;
+  }
+  const totMs=stepMins(i.cur)*60000;
+  const pct=i.timed&&totMs?Math.min(100,Math.max(0,100-(i.left/totMs)*100)):0;
+  const doneUntil=i.ready?e.step+1:e.step;
+  const od=overdueSince(e);
+  return `<article class="run${od?" late":i.ready||!i.timed?" ready":""}" data-run="${esc(e.id)}">
+    ${od?`<div class="latebar">Sin hacer ${agoLabel(od)}</div>`:""}
+    <div class="run-h"><h3>${esc(e.name)}</h3>${S.personas.length?(i.ready&&i.next?`<span class="resp" style="--pc:${pColor(stepResp(e,e.step+1))}">${esc(rLabel(stepResp(e,e.step+1))||"Sin asignar")}</span>`:respChip(e.id,e.resp)):`<span class="who">${e.who&&e.who!==yo()?"puesta por "+esc(e.who):""}</span>`}</div>
+    <div class="now">${esc(label)}</div>
+    ${i.timed&&!i.ready?`<div class="clock" data-ends="${e.endsAt}">${clock(i.left)}</div><div class="ends">Termina ${whenLabel(e.endsAt)}</div><div class="bar"><i data-bar="${e.endsAt}" data-min="${stepMins(i.cur)}" style="width:${pct}%"></i></div>`:""}
+    ${i.steps.length>1?`<div class="steps">${i.steps.map((s,k)=>{const r=S.personas.length?stepResp(e,k):"";return `<span class="${k<doneUntil?"done":k===doneUntil?"cur":""}">${esc(s.name)}${isTimed(s)?" · "+stepLabel(s):""}${r?" · "+esc(rLabel(r)):""}</span>`}).join("")}</div>`:""}
+    <div class="run-a">${btn}<button class="link" data-act="cancel" data-id="${esc(e.id)}">Cancelar</button></div>
+  </article>`;
+}
+function pendRow(e,isLate){
+  const t=tplById(e.tplId);
+  const title=e.type==="zona"?e.zone:e.name;
+  const sub=e.type==="zona"?(t?t.name:e.name):"Tarea suelta";
+  return `<label class="row${isLate?" late":""}"><input type="checkbox" data-act="done" data-id="${esc(e.id)}"><span class="txt"><b>${esc(title)}</b><small>${esc(sub)}${isLate?` · <span class="late-txt">desde ${shortDate(e.date)}</span>`:""}</small></span>${S.personas.length?respChip(e.id,e.resp):""}</label>`;
+}
+function nextClean(rutinas){
+  let best=null;const today=parseYmd(S.hoy||ymd(new Date())),dow=(today.getDay()+6)%7+1;
+  rutinas.forEach(t=>t.days.forEach(dw=>{
+    let add=(dw-dow+7)%7;if(add===0)add=7; /* hoy ya se generó; la siguiente es dentro de una semana */
+    if(!best||add<best.add)best={add,name:t.name,dw};
+  }));
+  if(!best)return null;
+  const d=new Date(today);d.setDate(d.getDate()+best.add);
+  return {name:best.name,label:(best.add===1?"mañana":DIAS[best.dw-1])+" "+d.getDate()};
+}
+
+/* Cuenta atrás: solo se actualizan los números; al llegar a cero se repinta. */
+let lastReady=new Set(),firstTick=true;
+function tick(){
+  let crossed=false;
+  document.querySelectorAll("[data-ends]").forEach(el=>{
+    const left=Number(el.dataset.ends)-now();
+    if(left<=0)crossed=true;else el.textContent=clock(left);
+  });
+  document.querySelectorAll("[data-bar]").forEach(el=>{
+    const left=Number(el.dataset.bar)-now(),tot=Number(el.dataset.min)*60000;
+    el.style.width=Math.min(100,Math.max(0,100-left/tot*100))+"%";
+  });
+  const readyNow=new Set(S.act.filter(e=>e.type==="ciclo"&&e.endsAt&&e.endsAt<=now()).map(e=>e.id));
+  if(!firstTick)readyNow.forEach(id=>{if(!lastReady.has(id)){try{navigator.vibrate&&navigator.vibrate([200,100,200])}catch(e){}}});
+  lastReady=readyNow;firstTick=false;
+  if(crossed&&!S.sheetOpen)render();
+}
+setInterval(tick,1000);
+
+/* ---------- configuración ---------- */
+function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;S.sheetOpen=true}
+function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";S.sheetOpen=false;render()}
+$("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
+
+function openConfig(){
+  openSheet(`<h2>Ajustes</h2>
+    <div class="field people"><span class="flabel">Quién vive en casa</span>
+      <div id="pplrows">${(S.personasFull.length?S.personasFull:[{nombre:"",email:S.miEmail,chat:""},{nombre:"",email:"",chat:""}]).map(pplRow).join("")}</div>
+      <button type="button" class="btn ghost" data-act="addppl">+ Persona</button>
+      <div class="wahelp">${S.tgBot?`<b>Avisos por Telegram</b> · bot <b>@${esc(S.tgBot)}</b><br>Cada uno, desde su móvil, pulsa <b>Vincular</b> junto a su nombre: se abre Telegram, pulsa <b>Iniciar</b> y vuelve aquí. ${(()=>{const f=S.personasFull.filter(p=>!p.chat&&p.code);return f.length?`<br>Falta por vincular (mándale su enlace, o que escriba al bot su código):${f.map(p=>`<br>· ${esc(p.nombre)}: <b>/start ${esc(p.code)}</b> <a class="lnk" href="${esc(waLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`).join("")}`:""})()}<br><button type="button" class="lnk" data-act="tgcheck">Comprobar</button> · <button type="button" class="lnk" data-act="tgchange">Cambiar bot</button>`:tgSetup()}</div>
+      <div class="wahelp">${appBox()}</div>
+      <span class="flabel" style="margin-top:6px">Avisos del temporizador para</span>
+      <div class="seg"><button type="button" data-act="amode" data-k="resp" aria-pressed="${S.avisoModo!=="todos"}">A quien le toca</button><button type="button" data-act="amode" data-k="todos" aria-pressed="${S.avisoModo==="todos"}">A todos</button></div>
+      <span class="hint">Los avisos “al momento” (te toca, tareas nuevas) llegan en el acto. Los del temporizador, cuando termina.</span>
+      <label class="aviso"><input type="checkbox" id="aviso" ${aviso()?"checked":""}><span>Mandar avisos desde este móvil</span></label>
+      <button type="button" class="btn ghost" data-act="testaviso" style="margin-top:4px">Probar avisos</button>
+      <span class="hint">Manda un mensaje de prueba por Telegram a cada persona. Para desvincular a alguien, toca su «Telegram ✔» dos veces.</span>
+      <div class="actions" style="margin-top:4px"><span></span><button type="button" class="btn ghost" data-act="savepeople">Guardar ajustes</button></div>
+      ${S.personas.length?`<span class="flabel" style="margin-top:6px">En este móvil soy</span><div class="seg">${S.personas.map(p=>`<button type="button" data-act="iam" data-p="${esc(p)}" aria-pressed="${S.me===p}">${esc(p)}</button>`).join("")}</div>`:""}
+    </div>`);
+}
+
+/* ---------- plantillas ---------- */
+function openTpls(){
+  const c=S.tpls.filter(t=>t.type==="ciclo"),r=S.tpls.filter(t=>t.type==="rutina");
+  const item=t=>`<button data-act="edittpl" data-id="${esc(t.id)}"><span><b>${esc(t.name)}</b><br><small>${t.type==="rutina"?(t.days.map(d=>DIAS[d-1]).join(", ")||"sin día")+" · "+t.zones.length+(t.zones.length===1?" zona":" zonas"):esc(tplSum(t))}</small></span><span aria-hidden="true">›</span></button>`;
+  openSheet(`<h2>Plantillas</h2>
+    <p class="hint" style="margin:-6px 0 12px;font-size:.85rem;color:var(--muted)">Las tareas que más repetís, con sus pasos. Sin personas: a quién le toca se elige al lanzarla.</p>
+    ${c.length?`<p class="flabel">Tareas con pasos</p><div class="tpl-list">${c.map(item).join("")}</div>`:`<p style="color:var(--muted)">Aún no hay plantillas.</p>`}
+    ${r.length?`<p class="flabel">Limpieza por zonas (se lanzan solas su día)</p><div class="tpl-list">${r.map(item).join("")}</div>`:""}
+    <div class="actions"><button class="btn ghost" data-act="newzonas">+ Limpieza por zonas</button><button class="btn" data-act="newtpl">+ Nueva plantilla</button></div>`);
+}
+
+/* App de GitHub: enlace con la clave de cada persona (la primera vez en su móvil) */
+function appLink(p){return S.appUrl+"#k="+p.clave}
+function appBox(){
+  const ps=S.personasFull.filter(p=>p.clave);
+  if(!S.appUrl)return `<b>App sin el aviso de Google</b> (versión de GitHub): pega aquí su enlace cuando la tengas publicada.<div class="tgrow"><input id="appurl" placeholder="https://….github.io/casa/" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="appurlsave">Guardar</button></div>`;
+  return `<b>App sin el aviso de Google</b> · <a class="lnk" href="${esc(S.appUrl)}" target="_blank" rel="noopener">abrir</a><br>Cada persona entra con su enlace (lleva su clave; solo hace falta la primera vez en su móvil):${ps.map(p=>`<br>· ${esc(p.nombre)}: <a class="lnk" href="https://wa.me/?text=${encodeURIComponent("Hola "+p.nombre+" 👋 Esta es tu app de casa. Ábrela desde este enlace (solo la primera vez) y añádela a la pantalla de inicio: "+appLink(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a> · <button type="button" class="lnk" data-act="appcopy" data-n="${esc(p.nombre)}">Copiar</button> · <button type="button" class="lnk" data-act="appnewkey" data-n="${esc(p.nombre)}">Nueva clave</button>`).join("")}<br><button type="button" class="lnk" data-act="appurlchange">Cambiar enlace</button>`;
+}
+/* Mensaje para que una persona se vincule desde su propio móvil */
+function waLink(p){const url="https://t.me/"+S.tgBot+"?start="+p.code;return "https://wa.me/?text="+encodeURIComponent("Hola "+p.nombre+" 👋 Para recibir los avisos de Tareas de casa, abre este enlace y pulsa Iniciar: "+url)}
+function tgSetup(){return `<b>Avisos por Telegram</b>: primero cread vuestro bot (una vez, 2 minutos):<br>1. En Telegram busca <b>@BotFather</b> y pulsa <b>Iniciar</b>.<br>2. Mándale <b>/newbot</b>. Te pide un nombre (por ejemplo <i>Tareas de casa</i>) y un usuario que acabe en <b>bot</b> (por ejemplo <i>tareasguille_bot</i>).<br>3. Te contesta con un <b>token</b>, algo como <i>123456789:AAH…</i>. Cópialo entero y pégalo aquí:<div class="tgrow"><input id="tgtoken" placeholder="Token del bot" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="tgsave">Guardar</button></div>`}
+function pplRow(p){return `<div class="pplrow"><input class="pn" value="${esc(p.nombre)}" placeholder="Nombre" aria-label="Nombre" autocomplete="off">${S.tgBot?(p.chat?`<button type="button" class="tgok" data-act="tgunlink" data-n="${esc(p.nombre)}" aria-label="${esc(p.nombre)} vinculado. Toca para desvincular">Telegram ✔</button>`:`<button type="button" class="tglink" data-act="tglink" data-code="${esc(p.code||"")}">Vincular</button>`):"<span></span>"}<button type="button" class="rm" data-act="rmppl" aria-label="Quitar persona">×</button><input class="pe" type="hidden" value="${esc(p.email||"")}"><input class="pc" type="hidden" value="${esc(p.chat||"")}"></div>`}
+function pplForm(){return [...document.querySelectorAll(".pplrow")].map(r=>({nombre:r.querySelector(".pn").value.trim(),email:r.querySelector(".pe").value.trim().toLowerCase(),chat:r.querySelector(".pc").value})).filter(p=>p.nombre)}
+function amodeForm(){const b=document.querySelector('[data-act="amode"][aria-pressed="true"]');return b?b.dataset.k:"resp"}
+let draft=null,delArm=false;
+/* Editor con dos modos:
+   "tpl": plantilla (pasos sin personas) o limpieza por zonas (con responsable, porque se lanza sola).
+   "launch": tarea a lanzar (desde cero, desde plantilla o repitiendo una): cada paso necesita a quién le toca. */
+let edMode="tpl";
+const blankStep=()=>({name:"",unit:"ahora",min:"",days:"",resp:""});
+function openEditor(id,type){
+  edMode="tpl";
+  const t=id?tplById(id):null;
+  draft=t?JSON.parse(JSON.stringify(t)):{id:"",name:"",type:type||"ciclo",steps:[blankStep()],days:[],zones:[{name:"",resp:""}],createdAt:0};
+  draft.steps=(draft.steps||[]).map(s=>Object.assign({},s,{resp:""}));
+  if(!draft.zones.length)draft.zones=[{name:"",resp:""}];
+  if(!draft.steps.length)draft.steps=[blankStep()];
+  delArm=false;drawEditor();
+}
+function openLauncher(src){
+  edMode="launch";
+  draft={id:"",tplId:src&&src.tplId||"",name:src&&src.name||"",type:"ciclo",
+    steps:src&&src.steps&&src.steps.length?src.steps.map(s=>Object.assign({},s,{resp:""})):[blankStep()],
+    save:false,fresh:!src};
+  drawEditor();
+}
+function collect(){
+  const n=$("#tname");if(!n)return;
+  draft.name=n.value;
+  if(draft.type==="ciclo"){
+    draft.steps=[...document.querySelectorAll(".steprow")].map(r=>{const u=r.querySelector(".su").value,v=r.querySelector(".sv").value,sr=r.querySelector(".pick");return {name:r.querySelector(".sn").value,unit:u,min:u==="min"?v:"",days:u==="dias"?v:"",resp:sr?pickVal(sr):""}});
+    const sv=$("#savetpl");if(sv)draft.save=sv.checked;
+  }else{
+    draft.zones=[...document.querySelectorAll(".zonerow")].map(r=>{const z=r.querySelector(".zr");return {name:r.querySelector(".zn").value,resp:z?(z.classList.contains("pick")?pickVal(z):z.value):""}});
+  }
+}
+function needResp(){return edMode==="launch"&&S.personas.length>0}
+/* En "lanzar": el botón no se activa hasta que todos los pasos con nombre tengan a quién le toca. */
+/* Tarea sencilla: en rojo y sin poder crear hasta que tenga qué, para quién y (si toca) cuánto. */
+function checkQuick(){
+  const btn=$("#onesubmit");if(!btn)return;
+  const g=$("#oneseg"),needP=!!(g&&S.personas.length),noP=needP&&!pickVal(g);
+  if(g)g.classList.toggle("missing",noP);
+  const u=$("#onewhen .su").value,n=Number(String($("#onewhen .sv").value||"").replace(",","."))||0,noN=u!=="ahora"&&!n;
+  const noName=!$("#onename").value.trim();
+  btn.disabled=noP||noN||noName;
+  btn.textContent=noP?"Falta para quién":noN?"Falta cuántos "+(u==="dias"?"días":"minutos"):"Crear y avisar";
+}
+/* Cambiar a quién le toca: al menos una persona. */
+function checkAssign(){
+  const btn=$("#assignok"),g=$("#apick");if(!btn||!g)return;
+  const no=S.personas.length>0&&!pickVal(g);
+  g.classList.toggle("missing",no);btn.disabled=no;btn.textContent=no?"Elige al menos una persona":"Guardar y avisar";
+}
+function checkForms(){checkLaunch();checkQuick();checkAssign()}
+function checkLaunch(){
+  const btn=$("#tsubmit");if(!btn||edMode!=="launch")return;
+  let miss=0;
+  const rows=[...document.querySelectorAll(".steprow")];
+  rows.forEach(r=>{const has=r.querySelector(".sn").value.trim()||rows.length===1,sr=r.querySelector(".pick");const bad=needResp()&&has&&sr&&!pickVal(sr);if(sr)sr.classList.toggle("missing",!!bad);if(bad)miss++});
+  const named=rows.some(r=>r.querySelector(".sn").value.trim()),noName=!$("#tname").value.trim();
+  btn.disabled=!!miss||!named||noName;
+  btn.textContent=miss?"Falta a quién le toca"+(miss>1?" ("+miss+" pasos)":""):noName?"Falta el nombre":!named?"Falta un paso":"Lanzar";
+}
+function stepRow(s,k){
+  const sel=needResp()?picker(s.resp,{cls:"sr",label:"A quién le toca el paso "+(k+1)}):"";
+  return `<div class="steprow"><span class="n">${k+1}</span><input class="sn" value="${esc(s.name)}" placeholder="Paso ${k+1}" aria-label="Paso ${k+1}"><button type="button" class="rm" data-act="rmstep" data-k="${k}" aria-label="Quitar paso">×</button><div class="stepopts"><select class="su" aria-label="Cuándo avisa el paso ${k+1}">${[["ahora","Ahora"],["min","Minutos"],["dias","Días"]].map(([v,l])=>`<option value="${v}" ${unitOf(s)===v?"selected":""}>${l}</option>`).join("")}</select><input class="sv" type="number" inputmode="numeric" min="1" value="${esc(unitOf(s)==="dias"?(s.days||""):unitOf(s)==="min"?(s.min||""):"")}" placeholder="${unitOf(s)==="dias"?"días":"min"}" aria-label="Cantidad" ${unitOf(s)==="ahora"?"hidden":""}></div>${sel}</div>`;
+}
+function cleanSteps(list){
+  return list.map(s=>{const u=unitOf(s),m=Number(String(s.min||"").replace(",","."))||0,dd=Number(String(s.days||"").replace(",","."))||0;
+    const unit=u==="min"&&m?"min":u==="dias"&&dd?"dias":"ahora";
+    return {name:String(s.name||"").trim(),unit,min:unit==="min"?m:0,days:unit==="dias"?dd:0,resp:s.resp||""}}).filter(s=>s.name);
+}
+function drawEditor(){
+  const d=draft,isNew=!d.id,L=edMode==="launch";
+  let body="";
+  if(d.type==="ciclo"){
+    body=`<div class="field"><span class="flabel">Pasos en orden${L&&S.personas.length?" y a quién le toca":""}</span><div id="steps">${d.steps.map(stepRow).join("")}</div>
+      <button type="button" class="btn ghost" data-act="addstep">+ Paso</button>
+      <span class="hint"><b>Ahora</b>: avisa al momento a quien le toca. <b>Minutos</b>: cuenta atrás y al terminar avisa a quien hace el siguiente paso. <b>Días</b>: igual, pero el aviso llega ese día a las 10:00 (de madrugada, hasta las 6:00, cuenta como la noche anterior: 1 día = esa misma mañana).</span></div>
+      ${L&&d.fresh?`<label class="savetpl"><input type="checkbox" id="savetpl" ${d.save?"checked":""}><span>Guardar también como plantilla</span></label>`:""}
+      ${L&&!S.personas.length?`<p class="hint" style="font-size:.82rem;color:var(--late)">Añade en ⚙️ quién vive en casa para poder elegir a quién le toca cada paso.</p>`:""}`;
+  }else{
+    body=`<div class="field"><span class="flabel">Día de limpieza</span><div class="seg days">${DCORTO.map((l,k)=>`<button type="button" data-act="tday" data-d="${k+1}" aria-pressed="${d.days.includes(k+1)}" aria-label="${DIAS[k]}">${l}</button>`).join("")}</div></div>
+      <div class="field"><span class="flabel">Zonas${S.personas.length?" y responsable":""}</span><div id="zones">${d.zones.map((z,k)=>`<div class="zonerow${S.personas.length?"":" nop"}"><input class="zn" value="${esc(z.name)}" placeholder="Zona ${k+1}" aria-label="Zona ${k+1}"><button type="button" class="rm" data-act="rmzone" data-k="${k}" aria-label="Quitar zona">×</button>${S.personas.length?picker(String(z.resp).toLowerCase()==="turnos"?"turnos":z.resp,{cls:"zr",turnos:true,label:"Responsable de la zona "+(k+1)}):`<input type="hidden" class="zr" value="${esc(z.resp||"")}">`}</div>`).join("")}</div>
+      <button type="button" class="btn ghost" data-act="addzone">+ Zona</button>
+      <span class="hint">Ese día aparecerán como pendientes y se avisa a cada uno. Puedes marcar una o varias personas; sin marcar, se avisa a todos. “Por turnos” va cambiando de persona cada semana.</span></div>`;
+  }
+  const title=L?(d.tplId||!d.fresh?"Lanzar "+esc(d.name):"Nueva tarea"):d.type==="rutina"?(isNew?"Nueva limpieza por zonas":"Editar limpieza"):(isNew?"Nueva plantilla":"Editar plantilla");
+  const left=L?`<button type="button" class="btn ghost" data-act="newmenu">Volver</button>`:isNew?`<button type="button" class="btn ghost" data-act="tpls">Volver</button>`:`<button type="button" class="btn danger" data-act="deltpl">Borrar</button>`;
+  openSheet(`<h2>${title}</h2>
+    <form id="tform">
+      <div class="field"><label class="flabel" for="tname">Nombre</label><input id="tname" required value="${esc(d.name)}" placeholder="${d.type==="rutina"?"Limpieza de la semana":"Lavadora, lavavajillas…"}" autocomplete="off"></div>
+      ${body}
+      <div class="actions">${left}<button class="btn" type="submit" id="tsubmit">${L?"Lanzar":"Guardar plantilla"}</button></div>
+    </form>`);
+  checkLaunch();
+  $("#tform").addEventListener("input",checkLaunch);
+  $("#tform").addEventListener("change",checkLaunch);
+  $("#tform").addEventListener("submit",e=>{
+    e.preventDefault();collect();
+    const name=(draft.name||"").trim();if(!name)return;
+    if(edMode==="launch"){
+      const steps=cleanSteps(draft.steps);
+      if(!steps.length){toast("Añade al menos un paso.");return}
+      if(needResp()&&steps.some(s=>!s.resp)){checkLaunch();toast("Elige a quién le toca cada paso");return}
+      closeSheetQuiet();
+      launchRun({name,steps},draft.tplId,draft.fresh&&draft.save);
+      return;
+    }
+    const item={id:draft.id||uid(),name,type:draft.type,createdAt:draft.createdAt||0,
+      steps:draft.type==="ciclo"?cleanSteps(draft.steps).map(s=>Object.assign(s,{resp:""})):[],
+      days:draft.type==="rutina"?draft.days:[],zones:draft.type==="rutina"?draft.zones.map(z=>({name:String(z.name||"").trim(),resp:z.resp||""})).filter(z=>z.name):[],
+      resp:""};
+    if(item.type==="ciclo"&&!item.steps.length){toast("Añade al menos un paso.");return}
+    if(item.type==="rutina"&&(!item.days.length||!item.zones.length)){toast("Elige un día y al menos una zona.");return}
+    const isNewT=!draft.id;
+    run("casa.saveTpl",{item},()=>{const i=S.tpls.findIndex(t=>t.id===item.id);if(i>=0)S.tpls[i]=item;else S.tpls.push(item)},isNewT?"Plantilla creada":"Guardada");
+    openTpls();
+  });
+}
+function closeSheetQuiet(){S.sheetOpen=false;$("#backdrop").hidden=true;$("#sheet").innerHTML=""}
+
+/* Lanzar: la tarjeta aparece al momento; si pulsas "Hecho" antes de que el servidor conteste, se aplica en cuanto llega. */
+function launchRun(item,tplId,guardar){
+  const s0=item.steps[0]||{};
+  const tmp={id:"tmp-"+uid(),tplId:tplId||"",name:item.name,type:"ciclo",step:0,steps:item.steps,endsAt:endFor(s0),since:now(),status:"activa",who:yo(),starter:yo(),resp:s0.resp||yo(),createdAt:now()};
+  window.scrollTo({top:0,behavior:"smooth"});
+  return run("casa.launch",{item,tplId:tplId||"",guardar:!!guardar,aviso:aviso()},()=>S.act.unshift(tmp),tmp.endsAt?`${item.name}: termina ${whenLabel(tmp.endsAt)}`:(s0.resp?"Lanzada · aviso a "+rLabel(s0.resp):"Lanzada")).then(()=>{
+    if(!tmp.pendingNext)return;
+    const real=S.act.filter(e=>e.name===item.name&&e.type==="ciclo"&&!String(e.id).startsWith("tmp-")).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
+    if(real)doNext(real.id,tmp.pendingNext,true);
+  });
+}
+function doNext(id,n,silent){
+  const x=S.act.find(e=>e.id===id);
+  const advance=()=>{
+    if(!x)return;
+    const steps=runSteps(x);x.step+=n;x.endsAt=0;x.since=now();
+    if(x.step>=steps.length){S.act=S.act.filter(e=>e!==x);S.done.unshift(Object.assign({},x,{status:"hecha",doneAt:now(),who:yo()}))}
+    else x.endsAt=endFor(steps[x.step]);
+  };
+  if(String(id).startsWith("tmp-")){if(x){x.pendingNext=(x.pendingNext||0)+n;advance();render()}return}
+  run("casa.next",{id,n,aviso:aviso()},silent?null:advance);
+}
+
+/* ---------- acciones ---------- */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const a=b.dataset.act;
+  if(a==="done")return; /* va por "change" */
+  switch(a){
+    case "config":openConfig();break;
+    case "tpls":openTpls();break;
+    case "newtpl":openEditor(null,"ciclo");break;
+    case "newzonas":openEditor(null,"rutina");break;
+    case "edittpl":openEditor(b.dataset.id);break;
+    case "fresh":openLauncher(null);break;
+    case "fromtpl":{const t=tplById(b.dataset.id);if(t)openLauncher({tplId:t.id,name:t.name,steps:t.steps});break}
+    case "again":{const x=S.done.find(e=>e.id===b.dataset.id);if(x)openLauncher({tplId:x.tplId,name:x.name,steps:runSteps(x)});break}
+    case "tday":{collect();const d=+b.dataset.d;draft.days=draft.days.includes(d)?draft.days.filter(x=>x!==d):[...draft.days,d].sort();drawEditor();break}
+    case "addstep":collect();draft.steps.push(blankStep());drawEditor();{const r=document.querySelectorAll(".steprow .sn");r[r.length-1].focus()}break;
+    case "addzone":collect();draft.zones.push({name:"",resp:""});drawEditor();{const r=document.querySelectorAll(".zonerow .zn");r[r.length-1].focus()}break;
+    case "rmzone":collect();draft.zones.splice(+b.dataset.k,1);if(!draft.zones.length)draft.zones=[{name:"",resp:""}];drawEditor();break;
+    case "iam":S.me=b.dataset.p;lsSet("casa-yo",S.me);if(S.sheetOpen)openConfig();else render();toast("Hola, "+S.me);break;
+    case "people":openConfig();setTimeout(()=>{const i=$("#ppl");if(i)i.focus()},80);break;
+    case "addppl":$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:"",chat:""}));break;
+    case "rmppl":b.closest(".pplrow").remove();break;
+    case "amode":document.querySelectorAll('[data-act="amode"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));break;
+    case "savepeople":{
+      const full=pplForm();
+      const mode=amodeForm();
+      S.sheetOpen=false;$("#backdrop").hidden=true;$("#sheet").innerHTML="";
+      run("casa.people",{personas:full,avisoModo:mode},()=>{S.personasFull=full;S.personas=full.map(p=>p.nombre);S.avisoModo=mode},"Guardado");
+      break}
+    case "tgsave":{
+      const tok=($("#tgtoken")||{}).value||"";
+      if(!tok.trim()){toast("Pega el token que te dio BotFather");break}
+      b.disabled=true;b.textContent="…";
+      api("casa.tgBot",{token:tok.trim()}).then(d=>{apply(d);openConfig();toast("Bot guardado. Ahora pulsad Vincular.")}).catch(err=>{b.disabled=false;b.textContent="Guardar";fail(err)});
+      break}
+    case "tgchange":S.tgBot="";openConfig();break;
+    case "tglink":{
+      const code=b.dataset.code,n=b.closest(".pplrow").querySelector(".pn").value.trim();
+      const saved=S.personasFull.find(p=>p.nombre===n);
+      if(!code||!saved){toast("Pulsa antes «Guardar ajustes» y luego Vincular");break}
+      S.tgWait=true;
+      window.open("https://t.me/"+encodeURIComponent(S.tgBot)+"?start="+encodeURIComponent(code),"_blank");
+      break}
+    case "tgcheck":tgCheck(true);break;
+    case "appurlsave":{
+      const u=(($("#appurl")||{}).value||"").trim();
+      if(!/^https:[/][/]/.test(u)){toast("Pega el enlace completo, empieza por https://");break}
+      api("casa.appUrl",{url:u}).then(d=>{apply(d);openConfig();toast("Enlace guardado")}).catch(fail);break}
+    case "appurlchange":S.appUrl="";openConfig();break;
+    case "appcopy":{
+      const p=S.personasFull.find(x=>x.nombre===b.dataset.n);if(!p)break;
+      const t=appLink(p);
+      const done=()=>toast("Enlace de "+p.nombre+" copiado");
+      try{navigator.clipboard.writeText(t).then(done,()=>prompt("Copia el enlace:",t))}catch(err){prompt("Copia el enlace:",t)}
+      break}
+    case "appnewkey":{
+      if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="¿Seguro? Su enlace viejo dejará de valer";setTimeout(()=>{if(b.isConnected){b.dataset.arm="";b.textContent="Nueva clave"}},3500);break}
+      const n=b.dataset.n;
+      api("casa.newKey",{nombre:n}).then(d=>{apply(d);openConfig();toast("Nueva clave para "+n+". Mándale el enlace nuevo.")}).catch(fail);break}
+    case "tgunlink":{
+      if(!b.classList.contains("arm")){b.classList.add("arm");b.textContent="¿Desvincular?";setTimeout(()=>{if(b.isConnected){b.classList.remove("arm");b.textContent="Telegram ✔"}},3500);break}
+      const n=b.dataset.n;b.disabled=true;
+      api("casa.tgUnlink",{nombre:n}).then(d=>{apply(d);openConfig();toast(n+" ya no recibe avisos")}).catch(err=>{b.disabled=false;fail(err)});
+      break}
+    case "testaviso":{
+      b.disabled=true;b.textContent="Enviando…";
+      api("casa.testAviso",{yo:yo()}).then(r=>{
+        const msg={ok:"mensaje enviado ✔",falta:"aún no ha vinculado Telegram",sinbot:"falta crear el bot",error:"no se ha podido enviar"};
+        openSheet(`<h2>Prueba de Telegram</h2><p style="margin-top:0;color:var(--muted)">Os tiene que llegar un mensaje del bot en unos segundos.</p><div class="tpl-list">${(r.resultados||[]).map(x=>`<div class="testrow ${x.estado}"><b>${esc(x.nombre)}</b><span>${msg[x.estado]||x.estado}${x.detalle?" ("+esc(x.detalle)+")":""}</span></div>`).join("")||"<p>Añade las personas en ⚙️.</p>"}</div>${r.programados?"":`<p class="hint" style="font-size:.82rem;color:var(--late)">Los avisos del temporizador aún no están activados: en Apps Script ejecuta la función <b>activarAvisos</b> una vez.</p>`}<div class="actions"><span></span><button class="btn" data-act="config">Volver</button></div>`);
+      }).catch(err=>{b.disabled=false;b.textContent="Probar avisos";fail(err)});
+      break}
+    case "filt":S.filter=b.dataset.k;lsSet("casa-filtro",S.filter);render();break;
+    case "assign":{
+      e.preventDefault();e.stopPropagation();
+      const id=b.dataset.id;if(id.startsWith("tmp-"))break;
+      const x=S.act.find(t=>t.id===id);if(!x)break;
+      openSheet(`<h2>¿A quién le toca?</h2><p class="hint" style="margin:-6px 0 12px;font-size:.85rem;color:var(--muted)">${esc(x.type==="zona"?x.zone:x.name)}. Puedes marcar una o varias personas.</p>${picker(x.resp,{id:"apick"})}<div class="actions" style="margin-top:16px"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn" data-act="assignok" id="assignok" data-id="${esc(id)}">Guardar y avisar</button></div>`);
+      checkAssign();
+      break}
+    case "assignok":{
+      const id=b.dataset.id,x=S.act.find(t=>t.id===id),r=pickVal($("#apick"));
+      if(S.personas.length&&!r){toast("Elige al menos una persona");$("#apick").classList.add("missing");break}
+      closeSheetQuiet();
+      run("casa.assign",{id,resp:r,aviso:aviso()},()=>{if(x){x.resp=r;if(x.steps&&x.steps[x.step])x.steps[x.step].resp=r}},"Aviso a "+(rLabel(r)||"todos"));
+      break}
+    case "close":closeSheet();break;
+    case "pk":{
+      const g=b.closest(".pick"),turn=b.dataset.p==="turnos",on=b.getAttribute("aria-pressed")!=="true";
+      if(turn&&on)g.querySelectorAll('[data-act="pk"]').forEach(x=>x.setAttribute("aria-pressed","false"));
+      if(!turn&&on){const t=g.querySelector('[data-p="turnos"]');if(t)t.setAttribute("aria-pressed","false")}
+      b.setAttribute("aria-pressed",String(on));checkForms();break}
+    case "pkall":{
+      const g=b.closest(".pick"),names=[...g.querySelectorAll('[data-act="pk"]')].filter(x=>x.dataset.p!=="turnos");
+      const all=names.every(x=>x.getAttribute("aria-pressed")==="true");
+      names.forEach(x=>x.setAttribute("aria-pressed",String(!all)));
+      const t=g.querySelector('[data-p="turnos"]');if(t)t.setAttribute("aria-pressed","false");
+      checkForms();break}
+    case "rmstep":collect();draft.steps.splice(+b.dataset.k,1);if(!draft.steps.length)draft.steps=[blankStep()];drawEditor();break;
+    case "deltpl":
+      if(!delArm){delArm=true;b.textContent="¿Seguro? Toca otra vez";setTimeout(()=>delArm=false,3500);break}
+      {const id=draft.id;
+      run("casa.deleteTpl",{id},()=>{S.tpls=S.tpls.filter(t=>t.id!==id);S.act=S.act.filter(x=>!(x.tplId===id&&!(x.steps&&x.steps.length)))},"Plantilla borrada");openTpls()}
+      break;
+    case "newmenu":openNewMenu();break;
+    case "newquick":openQuick();break;
+    case "doneitem":doneItem(b.dataset.id);break;
+    case "next":doNext(b.dataset.id,+b.dataset.n||1);break;
+    case "cancel":{
+      const id=b.dataset.id;if(id.startsWith("tmp-"))break;
+      if(b.dataset.arm!=="1"){const lab=b.dataset.label||"Cancelar";b.dataset.arm="1";b.textContent="¿"+lab+"? Toca otra vez";setTimeout(()=>{if(b.isConnected){b.dataset.arm="";b.textContent=lab}},3500);break}
+      run("casa.cancel",{id},()=>{S.act=S.act.filter(e=>e.id!==id)});
+      break}
+  }
+});
+document.addEventListener("change",e=>{
+  if(e.target.id==="aviso"){try{localStorage.setItem("casa-aviso",e.target.checked?"1":"0")}catch(err){}return}
+  if(e.target.classList&&e.target.classList.contains("su")){const v=e.target.parentNode.querySelector(".sv");v.hidden=e.target.value==="ahora";v.placeholder=e.target.value==="dias"?"días":"min";if(!v.hidden)v.focus();return}
+  const b=e.target;
+  if(b.dataset&&b.dataset.act==="done"&&b.checked){
+    const id=b.dataset.id;if(id.startsWith("tmp-")){b.checked=false;return}
+    const row=b.closest(".row");if(row)row.style.opacity=".4";
+    setTimeout(()=>run("casa.done",{id},()=>{const x=S.act.find(e=>e.id===id);S.act=S.act.filter(e=>e.id!==id);if(x)S.done.unshift(Object.assign({},x,{status:"hecha",doneAt:now(),who:yo()}))}),250);
+  }
+});
+
+/* ---------- arranque ---------- */
+if(BOOT&&BOOT.ok)apply(BOOT.data);
+else{
+  S.ready=true;
+  $("#app").innerHTML=`<section><div class="calm">${BOOT&&BOOT.error==="sin_acceso"?"Tu cuenta de Google no tiene acceso a la hoja. Pide que te la compartan desde “Apps casa → Compartir con mi pareja”.":"No se pudieron cargar las tareas. Recarga la página."}</div></section>`;
+}
+document.addEventListener("visibilitychange",()=>{if(S.tgWait&&S.sheetOpen&&document.visibilityState==="visible")setTimeout(()=>tgCheck(false),1500);else refresh()});
+/* Al volver de Telegram: guarda las personas y mira quién ha pulsado Iniciar. */
+function tgCheck(manual){
+  if(!$("#pplrows"))return;
+  const personas=pplForm(),avisoModo=amodeForm(),antes=S.personasFull.filter(p=>p.chat).length;
+  api("casa.tgLink",{personas,avisoModo}).then(d=>{
+    apply(d);const ahora=S.personasFull.filter(p=>p.chat).length;
+    if(ahora>antes){S.tgWait=S.personasFull.some(p=>!p.chat);toast("Telegram vinculado ✔")}
+    else if(manual){const g=d.tgDiag||{};toast(g.error?"Telegram: "+g.error:!g.mensajes?"El bot no ha recibido nada. Pulsa Vincular y luego Iniciar en Telegram.":"Aún no. Pulsa Vincular desde este móvil o escribe al bot el código que sale aquí.")}
+    if(S.sheetOpen)openConfig();
+  }).catch(fail);
+}
+setInterval(()=>refresh(),30000);
+})();
+</script>
+</body>
+</html>

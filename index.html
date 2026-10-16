@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Apps casa</title>
+<meta name="theme-color" content="#EEF0F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101318" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Casa">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="48x48" href="favicon-48.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<script src="config.js"></script>
+<style>
+/* Apps casa · contenedor: guarda la clave, habla con la hoja y tiene las cuatro apps precargadas. */
+:root{--bg:#EEF0F3;--surface:#FFFFFF;--ink:#1A1F26;--muted:#5F6874;--line:#DADFE6;--accent:#0E7C86;--late:#C62828;
+  --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;--f-body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme: dark){:root{--bg:#101318;--surface:#191D24;--ink:#E9EDF2;--muted:#9AA3AE;--line:#2A303A;--accent:#4FC3C9;--late:#FF7A70;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--f-body);-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+iframe.app{position:fixed;inset:0;width:100%;height:100%;height:100dvh;border:0;display:block;visibility:hidden;background:var(--bg)}
+iframe.app.on{visibility:visible;z-index:1}
+.gate{min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
+.card{width:100%;max-width:380px;background:var(--surface);border-radius:22px;padding:24px 20px;box-shadow:0 1px 2px rgba(26,31,38,.06),0 8px 24px rgba(26,31,38,.08)}
+.card h1{font-family:var(--f-display);font-weight:800;font-size:1.8rem;margin:0 0 6px;letter-spacing:-.02em}
+.card p{margin:0 0 16px;color:var(--muted);line-height:1.45;font-size:.95rem}
+.card input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit;font-size:1rem;margin-bottom:10px}
+.card button{width:100%;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;background:var(--accent);color:#fff}
+.card .err{color:var(--late);font-weight:600;font-size:.88rem;margin:-4px 0 12px}
+.loading{min-height:100dvh;display:grid;place-items:center;color:var(--muted);font-size:.95rem}
+.loading span{display:inline-block;width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:g 0.8s linear infinite;margin-bottom:10px}
+@keyframes g{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.loading span{animation:none}}
+</style>
+</head>
+<body>
+<div class="gate" id="gate" hidden>
+  <form class="card" id="gateform" autocomplete="off">
+    <h1>Apps casa</h1>
+    <p id="gatemsg">Abre el enlace que te han mandado (lleva tu clave) o escríbela aquí. Solo hace falta la primera vez en este móvil.</p>
+    <div class="err" id="gateerr" hidden></div>
+    <input id="gatekey" placeholder="Tu clave" autocapitalize="off" spellcheck="false" aria-label="Clave">
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+<div class="loading" id="loading" hidden><div style="text-align:center"><span></span><br>Cargando la casa…</div></div>
+
+<script>
+(function(){
+"use strict";
+var API=window.CASA_API||"";
+var APPS=["inicio","menu","ocio","tareas"];
+var K_KEY="casa-clave",K_BOOT="casa-boot";
+function lsg(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lss(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
+function $(id){return document.getElementById(id)}
+
+var key=lsg(K_KEY)||"";
+var cache=null;try{cache=JSON.parse(lsg(K_BOOT)||"null")}catch(e){cache=null}
+var frames={},cur=null,built=false,lastInicio=0,dirty=false;
+
+/* La clave puede llegar en el enlace: …/#k=CLAVE */
+var mk=location.hash.match(/k=([A-Za-z0-9]+)/);
+if(mk){if(mk[1]!==key){key=mk[1];lss(K_KEY,key);cache=null;lss(K_BOOT,null)}}
+var startApp=location.hash.replace(/^#/,"");if(APPS.indexOf(startApp)<0)startApp="inicio";
+try{history.replaceState({app:"inicio"},"",location.pathname)}catch(e){}
+
+/* ---------- servidor ---------- */
+function post(b){
+  return fetch(API,{method:"POST",body:JSON.stringify(Object.assign({key:key},b)),redirect:"follow"})
+    .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()});
+}
+/* Lo que usan las apps (en lugar de google.script.run). Devuelve {ok,data} o {ok:false,error}. */
+window.casaApi=function(b){
+  return post(b).then(function(r){
+    if(r&&r.error==="clave"){lockOut();return r}
+    if(r&&r.ok){remember(b,r.data);if(!/[.](load|list)$/.test(b.action||""))dirty=true}
+    return r;
+  },function(e){throw {message:String(e&&e.message||e)}});
+};
+/* Guarda en el móvil lo último de cada app, para enseñarlo al momento la próxima vez */
+function remember(b,d){
+  if(!cache||!d)return;
+  var a=b.action||"";
+  if(a.indexOf("casa.")===0&&d.activas){cache.tareas=d;saveCache()}
+  else if(a==="ocio.list"&&Array.isArray(d)){cache.ocio=d;saveCache()}
+  else if(a==="menu.load"&&d.semana===lunes()){cache.menu=d;saveCache()}
+}
+var saveT=null;
+function saveCache(){clearTimeout(saveT);saveT=setTimeout(function(){lss(K_BOOT,JSON.stringify(cache))},300)}
+
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function lunes(){var d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return ymd(d)}
+/* Datos iniciales de cada app: la copia guardada, ajustada a hoy (la de verdad llega en 1-2 s) */
+window.casaBoot=function(app){
+  var d=cache&&cache[app];if(!d)return null;
+  d=JSON.parse(JSON.stringify(d));
+  if(app==="tareas"){d.now=Date.now();d.hoy=ymd(new Date())}
+  if(app==="inicio"&&d.casa)d.casa.now=Date.now();
+  if(app==="menu"&&d.semana!==lunes())d={semana:lunes(),recetas:d.recetas,plan:null};
+  return {ok:true,data:d};
+};
+function sig(app,d){if(!d)return"";d=JSON.parse(JSON.stringify(d));delete d.now;return JSON.stringify(d)}
+
+/* ---------- pantallas ---------- */
+function build(){
+  if(built)return;built=true;
+  $("loading").hidden=true;$("gate").hidden=true;
+  make(startApp);
+  if(startApp!=="inicio"){make("inicio");try{history.pushState({app:startApp},"","#"+startApp)}catch(e){}}
+  show(startApp);
+  /* el resto se precarga sin estorbar */
+  var rest=APPS.filter(function(a){return !frames[a]});
+  (function next(){var a=rest.shift();if(!a)return;make(a);frames[a].addEventListener("load",function(){setTimeout(next,60)},{once:true})})();
+}
+function make(app){
+  if(frames[app])return frames[app];
+  var f=document.createElement("iframe");
+  f.className="app";f.title=app;f.setAttribute("allow","clipboard-read; clipboard-write; web-share");
+  f.addEventListener("load",function(){f.ready=true;try{f.contentWindow.__casaShow(app===cur)}catch(e){}});
+  f.src=app+".html?v=2026-10-14.1";
+  document.body.appendChild(f);frames[app]=f;return f;
+}
+function show(app){
+  cur=app;make(app);
+  APPS.forEach(function(a){var f=frames[a];if(!f)return;f.classList.toggle("on",a===app);if(f.ready){try{f.contentWindow.__casaShow(a===app)}catch(e){}}});
+  if(app==="inicio"&&(dirty||Date.now()-lastInicio>30000))refreshInicio();
+}
+/* Navegar entre apps (y el botón Atrás del móvil vuelve al lanzador) */
+window.casaNav=function(app){
+  if(APPS.indexOf(app)<0)app="inicio";
+  if(app===cur)return;
+  if(app==="inicio"){if(history.state&&history.state.app&&history.state.app!=="inicio")history.back();else show("inicio");return}
+  try{history.pushState({app:app},"","#"+app)}catch(e){}
+  show(app);
+};
+window.addEventListener("popstate",function(e){show((e.state&&e.state.app)||"inicio")});
+/* Si se abre un enlace con clave (#k=…) con la app ya abierta, se arranca de nuevo con esa clave */
+window.addEventListener("hashchange",function(){if(/k=[A-Za-z0-9]+/.test(location.hash))location.reload()});
+
+function refreshInicio(){
+  lastInicio=Date.now();dirty=false;
+  post({action:"boot",app:"inicio"}).then(function(r){
+    if(r&&r.error==="clave"){lockOut();return}
+    if(!r||!r.ok||!cache)return;
+    cache.inicio=r.data;saveCache();
+    var f=frames.inicio;if(f&&f.ready){try{f.contentWindow.__casaApply(r.data)}catch(e){}}
+  }).catch(function(){});
+}
+/* Al abrir: todo de una vez. Si ya había copia en el móvil, se ve al momento y esto la pone al día. */
+function refreshAll(first){
+  lastInicio=Date.now();
+  return post({action:"bootAll",appUrl:location.origin+location.pathname}).then(function(r){
+    if(r&&r.error==="clave"){lockOut(first?"Esa clave no vale. Revisa el enlace o pide uno nuevo.":null);return}
+    if(!r||!r.ok){if(first)fallo(r&&r.error);return}
+    var old=cache||{};
+    cache={inicio:r.data.inicio,menu:r.data.menu,ocio:r.data.ocio,tareas:r.data.tareas};
+    if(r.data.yo&&!lsg("casa-yo"))lss("casa-yo",r.data.yo);
+    lss(K_BOOT,JSON.stringify(cache));
+    if(first){build();return}
+    APPS.forEach(function(a){
+      var f=frames[a];if(!f||!f.ready)return;
+      if(a==="inicio"){try{f.contentWindow.__casaApply(cache.inicio)}catch(e){}return}
+      if(a===cur)return; /* la que está en pantalla ya se pone al día sola */
+      if(sig(a,old[a])!==sig(a,cache[a])){f.ready=false;try{f.contentWindow.location.reload()}catch(e){}}
+    });
+  }).catch(function(e){if(first)fallo(String(e&&e.message||e))});
+}
+function fallo(msg){
+  $("loading").hidden=true;
+  showGate("No se pudo conectar con la hoja"+(msg?" ("+msg+")":"")+". Comprueba la conexión y vuelve a intentarlo.",true);
+}
+
+/* ---------- clave ---------- */
+function showGate(msg,isErr){
+  $("loading").hidden=true;$("gate").hidden=false;
+  var e=$("gateerr");e.hidden=!msg;e.textContent=msg||"";
+  if(!isErr)$("gatekey").value="";
+  setTimeout(function(){$("gatekey").focus()},50);
+}
+function lockOut(msg){
+  key="";lss(K_KEY,null);lss(K_BOOT,null);cache=null;
+  Object.keys(frames).forEach(function(a){frames[a].remove()});frames={};built=false;cur=null;
+  showGate(msg||"Tu clave ya no es válida. Pide un enlace nuevo a quien lleva la app.",false);
+}
+$("gateform").addEventListener("submit",function(e){
+  e.preventDefault();var v=$("gatekey").value.trim();if(!v)return;
+  key=v;lss(K_KEY,key);cache=null;lss(K_BOOT,null);
+  $("gate").hidden=true;$("loading").hidden=false;refreshAll(true);
+});
+
+/* ---------- arranque ---------- */
+if(!API){showGate("Falta pegar en config.js la dirección de la hoja (la URL /exec).",true)}
+else if(!key){showGate()}
+else if(cache){build();refreshAll(false)}
+else{$("loading").hidden=false;refreshAll(true)}
+
+/* Al volver a la app tras un rato, todo al día */
+var hiddenAt=0;
+document.addEventListener("visibilitychange",function(){
+  if(document.visibilityState==="hidden"){hiddenAt=Date.now();return}
+  if(built&&hiddenAt&&Date.now()-hiddenAt>60000)refreshAll(false);
+});
+
+if("serviceWorker" in navigator)window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})});
+})();
+</script>
+</body>
+</html>

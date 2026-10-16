@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* Apps casa · versión GitHub: esta página vive dentro de index.html, que guarda la clave y habla con la hoja. */
+(function(){
+  var P=window.parent;
+  if(P===window||!P.casaApi){location.replace("./#inicio");return}
+  /* google.script.run -> API con clave */
+  function R(){this.s=null;this.f=null}
+  R.prototype.withSuccessHandler=function(f){this.s=f;return this};
+  R.prototype.withFailureHandler=function(f){this.f=f;return this};
+  R.prototype.api=function(b){var s=this.s,f=this.f;P.casaApi(b).then(function(r){if(s)s(r)},function(e){if(f)f(e)})};
+  var g={script:{}};Object.defineProperty(g.script,"run",{get:function(){return new R()}});window.google=g;
+  /* Solo cuenta como "visible" la app que está en pantalla (así las ocultas no consultan la hoja) */
+  var shown=false;
+  function vis(){return shown&&P.document.visibilityState==="visible"?"visible":"hidden"}
+  Object.defineProperty(document,"visibilityState",{configurable:true,get:vis});
+  Object.defineProperty(document,"hidden",{configurable:true,get:function(){return vis()!=="visible"}});
+  window.__casaShow=function(v){var was=vis();shown=!!v;if(vis()!==was)document.dispatchEvent(new Event("visibilitychange"))};
+  P.document.addEventListener("visibilitychange",function(){if(shown)document.dispatchEvent(new Event("visibilitychange"))});
+  /* Enlaces entre apps: cambian de pantalla sin recargar */
+  document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#casa:"]');if(a){e.preventDefault();e.stopPropagation();P.casaNav(a.getAttribute("href").slice(6))}},true);
+})();
+</script>
+<script>
+/* Si algo falla, se muestra en pantalla en vez de quedarse "cargando". */
+window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d){d=document.createElement("div");d.id="jserr";d.setAttribute("role","alert");d.style.cssText="position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#B3261E;color:#fff;padding:10px 12px;border-radius:12px;font:13px/1.4 system-ui,sans-serif";(document.body||document.documentElement).appendChild(d)}d.textContent="Error en la app: "+m+(l?" (línea "+l+")":"")+". Haz una captura y pásamela.";}catch(e){}};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: lanzador — saludo con la fecha, rejilla de 2 cuadrados grandes (uno por app, con lo de hoy) y una fila para la hoja de datos. */
+:root{
+  --bg:#EEF0F3; --surface:#FFFFFF; --ink:#1A1F26; --muted:#5F6874; --line:#DADFE6;
+  --menu:#2F6B45; --menu-soft:#E2EEE4; --ocio:#3B2FD9; --ocio-soft:#E6E4FB; --tup:#D9680F;
+  --casa:#0E7C86; --casa-soft:#DDEEEF; --late:#C62828;
+  --shadow:0 1px 2px rgba(26,31,38,.06),0 8px 24px rgba(26,31,38,.08);
+  --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#101318; --surface:#191D24; --ink:#E9EDF2; --muted:#9AA3AE; --line:#2A303A;
+  --menu:#74C38F; --menu-soft:#1C2B22; --ocio:#9C93FF; --ocio-soft:#221F3D; --tup:#F2A057;
+  --casa:#4FC3C9; --casa-soft:#1B2E31; --late:#FF7A70;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+body{font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:12px}
+
+.wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:28px 40px}
+.date{font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+h1{font-family:var(--f-display);font-weight:800;font-size:2.1rem;line-height:1.05;letter-spacing:-.02em;margin:6px 0 22px;text-wrap:balance}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:360px){.grid{grid-template-columns:1fr}}
+.tile{position:relative;display:flex;flex-direction:column;gap:12px;min-height:200px;padding:16px;border-radius:22px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;transition:transform .15s ease}
+.tile:active{transform:scale(.98)}
+@media (prefers-reduced-motion:reduce){.tile{transition:none}}
+.tile::after{content:"";position:absolute;right:-40px;bottom:-40px;width:130px;height:130px;border-radius:50%;background:var(--soft);z-index:0}
+.tile>*{position:relative;z-index:1}
+.tile.wide{grid-column:1/-1;min-height:150px}
+.info .late{color:var(--late);font-weight:600}
+.ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--c);color:var(--surface)}
+.ico svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9}
+.name{font-family:var(--f-display);font-weight:800;font-size:1.15rem;line-height:1.1;margin:0}
+.info{margin-top:auto;display:grid;gap:4px;font-size:.82rem;min-width:0}
+.info .lbl{font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.info .row{display:flex;gap:6px;align-items:baseline;min-width:0}
+.info .row b{font-weight:600;color:var(--muted);flex:none;font-size:.75rem}
+.info .row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.info .none{color:var(--muted)}
+.chip{display:inline-block;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border-radius:99px;border:1px solid var(--tup);color:var(--tup);margin-left:4px;vertical-align:1px}
+
+.err{margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--surface);border:1px dashed var(--line);color:var(--muted);font-size:.88rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="date" id="date"></p>
+  <h1 id="hello">Hola</h1>
+
+  <nav class="grid" aria-label="Aplicaciones">
+    <a class="tile" href="#casa:menu" target="_top" style="--c:var(--menu);--soft:var(--menu-soft)">
+      <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M5 13h14M9 4c0 2 2 2 2 4M13 4c0 2 2 2 2 4"/></svg></span>
+      <p class="name">Menú semanal</p>
+      <div class="info" id="i-menu"><span class="none">Recetas, menú y compra</span></div>
+    </a>
+    <a class="tile" href="#casa:ocio" target="_top" style="--c:var(--ocio);--soft:var(--ocio-soft)">
+      <span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 6l2 4M12 6l2 4M17 6l2 4"/></svg></span>
+      <p class="name">Lista de ocio</p>
+      <div class="info" id="i-ocio"><span class="none">Pelis, series, libros y juegos</span></div>
+    </a>
+    <a class="tile wide" href="#casa:tareas" target="_top" style="--c:var(--casa);--soft:var(--casa-soft)">
+      <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M9 15l2 2 4-4"/></svg></span>
+      <p class="name">Tareas de casa</p>
+      <div class="info" id="i-casa"><span class="none">Lavadora, lavavajillas y limpieza</span></div>
+    </a>
+  </nav>
+  <div class="err" id="err" hidden></div>
+</div>
+
+<script>
+window.BOOT = (window.parent!==window&&window.parent.casaBoot)?window.parent.casaBoot("inicio"):null;
+</script>
+<script>
+(function(){
+"use strict";
+var BOOT=window.BOOT||null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const TIPO={peli:"Peli",serie:"Serie",libro:"Libro",juego:"Juego"};
+
+/* Pinta el lanzador. La app de GitHub lo vuelve a llamar con datos nuevos (window.__casaApply). */
+function draw(BOOT){
+const now=new Date(),h=now.getHours();
+$("#date").textContent=`${DIAS[now.getDay()]} ${now.getDate()} de ${MESES[now.getMonth()]}`;
+$("#hello").textContent=h<6?"Buenas noches":h<14?"Buenos días":h<21?"Buenas tardes":"Buenas noches";
+
+if(!BOOT||!BOOT.ok){
+  const e=$("#err");e.hidden=false;
+  e.textContent=BOOT&&BOOT.error==="sin_acceso"
+    ?"Tu cuenta de Google no tiene acceso a la hoja de datos. Pide que te la compartan desde “Apps casa → Compartir con mi pareja”."
+    :"No se pudo leer el resumen de hoy. Las apps siguen funcionando.";
+  return;
+}
+$("#err").hidden=true;
+const d=BOOT.data;
+/* Menú: lo que toca hoy */
+const hoy=d.hoy||{};
+const rows=[["Desayuno",hoy.desayuno],["Comida",hoy.comida],["Cena",hoy.cena]].filter(r=>r[1]);
+$("#i-menu").innerHTML=rows.length
+  ?`<span class="lbl">Hoy</span>`+rows.map(([k,v])=>`<span class="row"><b>${k}</b><span>${esc(v)}${k==="Comida"&&hoy.tupper?'<span class="chip">tupper</span>':""}</span></span>`).join("")
+  :`<span class="lbl">Hoy</span><span class="none">Sin planificar. Toca para organizar la semana.</span>`;
+
+/* Ocio: lo que estáis viendo / leyendo */
+const o=d.ocio||{enCurso:[],pendientes:0};
+$("#i-ocio").innerHTML=o.enCurso.length
+  ?`<span class="lbl">En curso</span>`+o.enCurso.map(i=>`<span class="row"><b>${TIPO[i.tipo]||""}</b><span>${esc(i.titulo)}</span></span>`).join("")+(o.pendientes?`<span class="none">${o.pendientes} pendiente${o.pendientes>1?"s":""}</span>`:"")
+  :o.pendientes
+    ?`<span class="lbl">Pendientes</span><span>${o.pendientes} en la lista</span>`
+    :`<span class="lbl">Vacía</span><span class="none">Apunta lo primero que quieras ver.</span>`;
+
+/* Tareas: lo que está en marcha y lo pendiente */
+const c=d.casa;
+if(c){
+  const off=(c.now||Date.now())-Date.now();
+  const min=f=>Math.max(0,Math.round((f-(Date.now()+off))/60000));
+  let ht="";
+  if(c.enMarcha.length)ht+=`<span class="lbl">En marcha</span>`+c.enMarcha.map(x=>`<span class="row"><b>${esc(x.nombre)}</b><span>${x.fin?(min(x.fin)?esc(x.paso)+" · "+min(x.fin)+" min":"¡listo!"):esc(x.paso)}</span></span>`).join("");
+  if(c.pendientes)ht+=`${c.enMarcha.length?"":`<span class="lbl">Pendientes</span>`}<span>${c.pendientes} por hacer${c.atrasadas?` · <span class="late">${c.atrasadas} atrasada${c.atrasadas>1?"s":""}</span>`:""}</span>`;
+  $("#i-casa").innerHTML=ht||`<span class="none">Lavadora, lavavajillas y limpieza</span>`;
+}
+
+}
+draw(BOOT);
+window.__casaApply=function(data){draw({ok:true,data:data})};
+
+})();
+</script>
+</body>
+</html>

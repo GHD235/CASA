@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* Apps casa · versión GitHub: esta página vive dentro de index.html, que guarda la clave y habla con la hoja. */
+(function(){
+  var P=window.parent;
+  if(P===window||!P.casaApi){location.replace("./#ocio");return}
+  /* google.script.run -> API con clave */
+  function R(){this.s=null;this.f=null}
+  R.prototype.withSuccessHandler=function(f){this.s=f;return this};
+  R.prototype.withFailureHandler=function(f){this.f=f;return this};
+  R.prototype.api=function(b){var s=this.s,f=this.f;P.casaApi(b).then(function(r){if(s)s(r)},function(e){if(f)f(e)})};
+  var g={script:{}};Object.defineProperty(g.script,"run",{get:function(){return new R()}});window.google=g;
+  /* Solo cuenta como "visible" la app que está en pantalla (así las ocultas no consultan la hoja) */
+  var shown=false;
+  function vis(){return shown&&P.document.visibilityState==="visible"?"visible":"hidden"}
+  Object.defineProperty(document,"visibilityState",{configurable:true,get:vis});
+  Object.defineProperty(document,"hidden",{configurable:true,get:function(){return vis()!=="visible"}});
+  window.__casaShow=function(v){var was=vis();shown=!!v;if(vis()!==was)document.dispatchEvent(new Event("visibilitychange"))};
+  P.document.addEventListener("visibilitychange",function(){if(shown)document.dispatchEvent(new Event("visibilitychange"))});
+  /* Enlaces entre apps: cambian de pantalla sin recargar */
+  document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#casa:"]');if(a){e.preventDefault();e.stopPropagation();P.casaNav(a.getAttribute("href").slice(6))}},true);
+})();
+</script>
+<script>
+/* Si algo falla, se muestra en pantalla en vez de quedarse "cargando". */
+window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d){d=document.createElement("div");d.id="jserr";d.setAttribute("role","alert");d.style.cssText="position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#B3261E;color:#fff;padding:10px 12px;border-radius:12px;font:13px/1.4 system-ui,sans-serif";(document.body||document.documentElement).appendChild(d)}d.textContent="Error en la app: "+m+(l?" (línea "+l+")":"")+". Haz una captura y pásamela.";}catch(e){}};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Instrument+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Layout: lista tipo entrada de cine — contadores, filtros por tipo y estado, tarjetas con borde de color por medio y portada; botón flotante para añadir; editor en hoja inferior. */
+:root{
+  --bg:#F4F3F8; --surface:#FFFFFF; --ink:#1E1B2E; --muted:#686479; --line:#E1DEEA; --soft:#ECEAF3;
+  --accent:#3B2FD9; --accent-ink:#FFFFFF; --star:#E5A100;
+  --t-peli:#D7263D; --t-serie:#7A3FE0; --t-libro:#0E8A6A; --t-juego:#D97F00;
+  --danger:#B3261E; --shadow:0 12px 30px rgba(30,27,46,.18);
+  --f-display:"Big Shoulders Display","Arial Narrow",Impact,system-ui,sans-serif;
+  --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#13121A; --surface:#1D1B27; --ink:#EDEBF5; --muted:#A39FB5; --line:#2E2B3C; --soft:#262333;
+  --accent:#9C93FF; --accent-ink:#13121A; --star:#FFC23D;
+  --t-peli:#FF5C70; --t-serie:#B08CFF; --t-libro:#3CC79F; --t-juego:#FFAA3B;
+  --danger:#F2867E; --shadow:0 12px 30px rgba(0,0,0,.5); color-scheme:dark}}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink);margin:0}
+body{font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+img{max-width:100%}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+
+.wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:16px 110px}
+h1{font-family:var(--f-display);font-weight:900;font-size:2.5rem;line-height:.95;letter-spacing:.01em;text-transform:uppercase;margin:0}
+.subbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:.8rem;color:var(--muted)}
+.subbar a{color:var(--accent);font-weight:700;text-decoration:none}
+.sync::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--t-libro);margin-right:6px;vertical-align:1px}
+.sync.busy::before{background:var(--t-juego)}
+.sync.err::before{background:var(--danger)}
+
+.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 16px}
+.counter{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:10px 12px;text-align:left}
+.counter b{display:block;font-family:var(--f-display);font-size:1.9rem;line-height:1;font-variant-numeric:tabular-nums}
+.counter span{font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.counter[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.counter[aria-pressed="true"] span{color:inherit;opacity:.75}
+
+.types{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
+.types::-webkit-scrollbar{display:none}
+.tchip{flex:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:.88rem;font-weight:600}
+.tchip i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--muted))}
+.tchip em{font-style:normal;color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums}
+.tchip[aria-pressed="true"]{border-color:var(--c,var(--ink));box-shadow:0 0 0 1px var(--c,var(--ink)) inset}
+
+.tools{display:flex;gap:8px;margin-bottom:12px}
+.tools input,.tools select{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:9px 12px;min-width:0}
+.tools input{flex:1}
+
+.list{display:grid;gap:8px}
+.card{position:relative;display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 12px 10px 16px;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--c)}
+.cover{width:46px;height:64px;border-radius:7px;object-fit:cover;flex:none;background:var(--soft)}
+.cover.ph{display:grid;place-items:center;font-family:var(--f-display);font-weight:900;font-size:1.3rem;color:var(--c);text-transform:uppercase}
+.card .main{flex:1;min-width:0;text-align:left;border:0;background:none;padding:0;display:flex;gap:12px;align-items:center}
+.card .txt{min-width:0}
+.card h3{margin:0;font-size:1.02rem;font-weight:700;overflow-wrap:anywhere}
+.meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:3px;font-size:.8rem;color:var(--muted)}
+.meta .kind{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:.68rem;color:var(--c)}
+.stars{color:var(--star);letter-spacing:1px;font-size:.85rem}
+.stars .off{color:var(--line)}
+.quick{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 10px;font-size:.8rem;font-weight:700;white-space:nowrap;flex:none}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:16px;padding:26px 18px;text-align:center}
+.empty h3{font-family:var(--f-display);text-transform:uppercase;font-size:1.5rem;margin:0 0 6px}
+.empty p{margin:0 auto 14px;color:var(--muted);max-width:42ch}
+
+.btn{border:0;border-radius:12px;padding:10px 16px;font-weight:700;background:var(--accent);color:var(--accent-ink);display:inline-block}
+.btn.ghost{background:var(--soft);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid currentColor}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom,0px));border:0;border-radius:18px;padding:14px 20px;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:1rem;box-shadow:var(--shadow);z-index:5}
+
+.backdrop{position:fixed;inset:0;background:rgba(12,10,20,.5);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;max-height:90%;overflow:auto;border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow);animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+.grab{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 12px}
+.sheet h2{font-family:var(--f-display);text-transform:uppercase;font-size:1.7rem;line-height:1;margin:0 0 14px}
+.field{display:grid;gap:6px;margin-bottom:14px}
+.flabel{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.field input{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 12px;font-weight:600;font-size:.88rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.seg.typed button[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:var(--surface)}
+.rate{display:flex;gap:4px;align-items:center}
+.rate button{border:0;background:none;font-size:2rem;line-height:1;padding:0 2px;color:var(--line)}
+.rate button.on{color:var(--star)}
+.rate .lbl{margin-left:8px;font-size:.85rem;color:var(--muted)}
+.sugg{display:flex;gap:6px;flex-wrap:wrap}
+.sugg button{border:1px dashed var(--line);background:none;border-radius:99px;padding:4px 10px;font-size:.8rem;color:var(--muted)}
+.photo-field{display:flex;gap:12px;align-items:center}
+.photo-field .cover{width:64px;height:90px;border-radius:9px}
+.photo-field .hint{font-size:.78rem;color:var(--muted);margin-top:4px}
+.actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
+.loading{color:var(--muted);text-align:center;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mi lista<br>de ocio</h1>
+  <div class="subbar"><a href="#casa:inicio" target="_top">← Todas las apps</a><span class="sync" id="sync">Al día</span></div>
+  <div class="counters" id="counters"></div>
+  <div class="types" id="types"></div>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Buscar título o plataforma" aria-label="Buscar título">
+    <select id="sort" aria-label="Ordenar">
+      <option value="recent">Recientes</option>
+      <option value="rating">Mejor nota</option>
+      <option value="az">A–Z</option>
+    </select>
+  </div>
+  <div id="list"><p class="loading">Cargando tu lista…</p></div>
+</div>
+<button class="fab" id="add">+ Añadir</button>
+<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+window.BOOT = (window.parent!==window&&window.parent.casaBoot)?window.parent.casaBoot("ocio"):null;
+</script>
+<script>
+(function(){
+"use strict";
+var BOOT=window.BOOT||null;
+const TYPES=[
+  {k:"peli",l:"Peli",pl:"Pelis",v:"ver",plat:["Netflix","Prime Video","HBO Max","Disney+","Filmin","Movistar Plus+","Cine"]},
+  {k:"serie",l:"Serie",pl:"Series",v:"ver",plat:["Netflix","HBO Max","Prime Video","Disney+","Apple TV+","Movistar Plus+","SkyShowtime"]},
+  {k:"libro",l:"Libro",pl:"Libros",v:"leer",plat:["Kindle","Papel","Audible","Biblioteca"]},
+  {k:"juego",l:"Juego",pl:"Juegos",v:"jugar",plat:["PlayStation","Xbox","Switch","Steam","PC","Móvil"]}
+];
+const STATUS=[{k:"pendiente",l:"Pendiente",pl:"Pendientes"},{k:"encurso",l:"En curso",pl:"En curso"},{k:"terminado",l:"Terminado",pl:"Terminados"}];
+const RLBL=["Sin nota","Malo","Flojo","Bien","Muy bueno","Imprescindible"];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>(window.crypto&&crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9-]/g,"");
+const T=k=>TYPES.find(t=>t.k===k)||TYPES[0];
+function imgUrl(id,w){return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w"+(w||300)}
+function coverTag(i,w){
+  if(i.photo)return `<img class="cover" src="${imgUrl(i.photo,w)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='https://drive.google.com/thumbnail?id=${encodeURIComponent(i.photo)}&sz=w${w||300}'">`;
+  return `<span class="cover ph">${esc((i.title||"?").trim().charAt(0))}</span>`;
+}
+
+const CKEY="apps-casa-ocio-v1";
+function cread(){try{return JSON.parse(localStorage.getItem(CKEY))||{}}catch(e){return{}}}
+function cwrite(){try{localStorage.setItem(CKEY,JSON.stringify(st.items))}catch(e){}}
+const st={ready:false,items:{},type:"all",status:"pendiente",q:"",sort:"recent",pending:0,syncErr:false,sheetOpen:false};
+try{const p=JSON.parse(localStorage.getItem(CKEY+"-ui"));if(p){st.type=p.type||"all";st.status=p.status||"pendiente";st.sort=p.sort||"recent"}}catch(e){}
+function saveUi(){try{localStorage.setItem(CKEY+"-ui",JSON.stringify({type:st.type,status:st.status,sort:st.sort}))}catch(e){}}
+
+/* ---------- servidor ---------- */
+function api(action,payload){
+  return new Promise((res,rej)=>{
+    if(!(window.google&&google.script&&google.script.run)){rej({code:"sin_servidor"});return}
+    google.script.run
+      .withSuccessHandler(r=>r&&r.ok?res(r.data):rej({code:(r&&r.error)||"error"}))
+      .withFailureHandler(e=>rej({code:"red",message:e&&e.message}))
+      .api(Object.assign({action},payload||{}));
+  });
+}
+function setSync(){
+  const s=$("#sync");
+  if(st.pending>0){s.className="sync busy";s.textContent="Guardando…"}
+  else if(st.syncErr){s.className="sync err";s.textContent="Sin guardar · reintenta"}
+  else{s.className="sync";s.textContent="Al día"}
+}
+function track(p){st.pending++;st.syncErr=false;setSync();return p.then(v=>v,e=>{st.syncErr=true;fail(e);throw e}).finally(()=>{st.pending--;setSync()})}
+let toastT;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2600)}
+function fail(e){const c=e&&e.code;
+  if(c==="sin_acceso")toast("Tu cuenta no tiene acceso a la hoja. Pide que te la compartan.");
+  else if(c==="red")toast("Sin conexión. El cambio no se ha guardado.");
+  else toast("No se pudo guardar: "+(c||"error"))}
+
+const writing={};
+function put(it){
+  st.items[it.id]=it;cwrite();render();
+  const prev=writing[it.id]||Promise.resolve();
+  writing[it.id]=prev.then(()=>track(api("ocio.save",{item:it}))).catch(()=>{});
+}
+function del(id){
+  delete st.items[id];cwrite();render();
+  track(api("ocio.delete",{id})).catch(()=>{});
+}
+function applyList(list){const m={};(list||[]).forEach(i=>m[i.id]=i);st.items=m;st.ready=true;cwrite();render()}
+function refresh(){
+  if(st.pending||st.sheetOpen||document.visibilityState!=="visible")return;
+  api("ocio.list").then(l=>{if(!st.pending&&!st.sheetOpen)applyList(l)}).catch(()=>{});
+}
+
+function boot(){
+  if(BOOT&&BOOT.ok)applyList(BOOT.data);
+  else{
+    st.items=cread();st.ready=true;render();
+    if(BOOT&&BOOT.error==="sin_acceso"){$("#list").innerHTML=`<div class="empty"><h3>Sin acceso</h3><p>Tu cuenta de Google no tiene permiso para usar esta hoja. Pide a quien la creó que use “Apps casa → Compartir con mi pareja” con tu correo.</p></div>`}
+    else toast("No se pudo cargar del servidor. Mostrando la última copia.");
+  }
+  document.addEventListener("visibilitychange",refresh);
+  setInterval(refresh,60000);
+}
+
+function starsHtml(n){let s="";for(let i=1;i<=5;i++)s+=i<=n?"★":'<span class="off">★</span>';return `<span class="stars" aria-label="${n} de 5">${s}</span>`}
+
+function render(){
+  const all=Object.values(st.items);
+  const byType=all.filter(i=>st.type==="all"||i.type===st.type);
+  $("#counters").innerHTML=STATUS.map(s=>`<button class="counter" data-act="status" data-k="${s.k}" aria-pressed="${st.status===s.k}"><b>${byType.filter(i=>i.status===s.k).length}</b><span>${s.pl}</span></button>`).join("");
+  const inStatus=all.filter(i=>i.status===st.status);
+  $("#types").innerHTML=`<button class="tchip" data-act="type" data-k="all" aria-pressed="${st.type==="all"}">Todo <em>${inStatus.length}</em></button>`+
+    TYPES.map(t=>`<button class="tchip" style="--c:var(--t-${t.k})" data-act="type" data-k="${t.k}" aria-pressed="${st.type===t.k}"><i></i>${t.pl} <em>${inStatus.filter(i=>i.type===t.k).length}</em></button>`).join("");
+  $("#sort").value=st.sort;
+  if(!st.ready)return;
+  const q=st.q.trim().toLowerCase();
+  let list=byType.filter(i=>i.status===st.status&&(!q||(i.title||"").toLowerCase().includes(q)||(i.platform||"").toLowerCase().includes(q)));
+  if(st.sort==="az")list.sort((a,b)=>(a.title||"").localeCompare(b.title||"","es"));
+  else if(st.sort==="rating")list.sort((a,b)=>(b.rating||0)-(a.rating||0)||(b.updatedAt||0)-(a.updatedAt||0));
+  else list.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const L=$("#list");
+  if(!all.length){
+    L.innerHTML=`<div class="empty"><h3>Empezad la lista</h3><p>Apuntad esa peli que os recomendaron, la serie que queréis empezar, el libro de la mesilla o el juego que está a medias. Con portada, dónde verlo y nota al terminar.</p><button class="btn" data-act="new">+ Añadir el primero</button></div>`;return}
+  if(!list.length){
+    const s=STATUS.find(x=>x.k===st.status).pl.toLowerCase();
+    L.innerHTML=`<div class="empty"><h3>Nada por aquí</h3><p>${q?"Ningún título coincide con la búsqueda.":`No hay ${st.type==="all"?"nada":T(st.type).pl.toLowerCase()} en ${s}.`}</p></div>`;return}
+  L.innerHTML=`<div class="list">`+list.map(i=>{
+    const t=T(i.type);let quick="";
+    if(i.status==="pendiente")quick=`<button class="quick" data-act="start" data-id="${esc(i.id)}">Empezar</button>`;
+    else if(i.status==="encurso")quick=`<button class="quick" data-act="finish" data-id="${esc(i.id)}">Terminado</button>`;
+    else if(!i.rating)quick=`<button class="quick" data-act="rate" data-id="${esc(i.id)}">Poner nota</button>`;
+    return `<article class="card" style="--c:var(--t-${t.k})"><button class="main" data-act="edit" data-id="${esc(i.id)}">${coverTag(i,140)}<span class="txt"><h3>${esc(i.title)}</h3><span class="meta"><span class="kind">${t.l}</span>${i.platform?`<span>${esc(i.platform)}</span>`:""}${i.status==="terminado"&&i.rating?starsHtml(i.rating):""}</span></span></button>${quick}</article>`;
+  }).join("")+`</div>`;
+}
+
+/* ---------- hoja ---------- */
+function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;st.sheetOpen=true}
+function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";st.sheetOpen=false}
+$("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
+
+function compress(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg",0.8));
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej({code:"imagen_no_valida"})};
+    img.src=url;
+  });
+}
+
+let draft=null,isEdit=false,uploading=false,tempPhoto="",previewUrl="";
+function openEditor(id){
+  const src=id?st.items[id]:{id:"",title:"",type:st.type==="all"?"peli":st.type,status:st.status,rating:0,platform:"",photo:""};
+  draft=Object.assign({},src);isEdit=!!id;uploading=false;tempPhoto="";previewUrl="";
+  drawEditor();
+}
+function drawEditor(keepFocus){
+  const d=draft,t=T(d.type);
+  const cover=previewUrl?`<img class="cover" src="${previewUrl}" alt="">`:coverTag(d,200);
+  openSheet(`<h2>${isEdit?"Editar":"Añadir"}</h2>
+  <form id="f">
+    <div class="field"><label class="flabel" for="ft">Título</label><input id="ft" required value="${esc(d.title)}" placeholder="${{peli:"Ej. Dune: Parte Dos",serie:"Ej. The Bear",libro:"Ej. El infinito en un junco",juego:"Ej. Hades II"}[d.type]}" autocomplete="off"></div>
+    <div class="field"><span class="flabel">Tipo</span><div class="seg typed">${TYPES.map(x=>`<button type="button" style="--c:var(--t-${x.k})" data-act="ftype" data-k="${x.k}" aria-pressed="${d.type===x.k}">${x.l}</button>`).join("")}</div></div>
+    <div class="field"><span class="flabel">Estado</span><div class="seg">${STATUS.map(x=>`<button type="button" data-act="fstatus" data-k="${x.k}" aria-pressed="${d.status===x.k}">${x.l}</button>`).join("")}</div></div>
+    <div class="field"><label class="flabel" for="fp">Dónde ${t.v}lo</label><input id="fp" value="${esc(d.platform)}" placeholder="Plataforma o formato" autocomplete="off"><div class="sugg">${t.plat.map(p=>`<button type="button" data-act="fplat" data-v="${esc(p)}">${esc(p)}</button>`).join("")}</div></div>
+    <div class="field"><span class="flabel">Portada</span><div class="photo-field" style="--c:var(--t-${t.k})"><span id="pbox">${cover}</span><div><label class="btn ghost" for="pfile">${d.photo||previewUrl?"Cambiar portada":"Añadir portada"}</label><input type="file" id="pfile" accept="image/*" hidden><div class="hint" id="phint">${uploading?"Subiendo portada…":"Foto de la carátula o captura de pantalla"}</div></div></div></div>
+    <div class="field"><span class="flabel">Nota</span><div class="rate">${[1,2,3,4,5].map(n=>`<button type="button" data-act="frate" data-n="${n}" class="${n<=d.rating?"on":""}" aria-label="${n} estrellas">★</button>`).join("")}<span class="lbl">${RLBL[d.rating||0]}</span></div></div>
+    <div class="actions">${isEdit?`<button type="button" class="btn danger" data-act="fdel">Borrar</button>`:"<span></span>"}<button class="btn" type="submit" id="fsave" ${uploading?"disabled":""}>Guardar</button></div>
+  </form>`);
+  const ft=$("#ft"),fp=$("#fp"),pf=$("#pfile");
+  ft.addEventListener("input",()=>draft.title=ft.value);
+  fp.addEventListener("input",()=>draft.platform=fp.value);
+  if(!isEdit&&!keepFocus)setTimeout(()=>ft.focus(),60);
+  pf.addEventListener("change",async()=>{
+    const f=pf.files&&pf.files[0];if(!f)return;
+    try{
+      uploading=true;$("#fsave").disabled=true;$("#phint").textContent="Subiendo portada…";
+      previewUrl=await compress(f);
+      $("#pbox").innerHTML=`<img class="cover" src="${previewUrl}" alt="">`;
+      const id=await api("foto.subir",{data:previewUrl.split(",")[1],mime:"image/jpeg",nombre:(draft.title||"portada")+".jpg",reemplaza:tempPhoto||null});
+      draft.photo=id;tempPhoto=id;
+      if($("#phint"))$("#phint").textContent="Portada lista";
+    }catch(e){if($("#phint"))$("#phint").textContent="No se pudo subir la portada.";fail(e)}
+    finally{uploading=false;if($("#fsave"))$("#fsave").disabled=false;pf.value=""}
+  });
+  $("#f").addEventListener("submit",e=>{
+    e.preventDefault();if(uploading)return;
+    const title=(draft.title||"").trim();if(!title)return;
+    const prev=draft.id?st.items[draft.id]:null,now=Date.now();
+    const it=Object.assign({},draft,{id:draft.id||uid(),title,platform:(draft.platform||"").trim(),updatedAt:now,createdAt:draft.createdAt||now});
+    if(it.status==="terminado"&&(!prev||prev.status!=="terminado"))it.finishedAt=now;
+    put(it);closeSheet();
+    if(st.status!==it.status){st.status=it.status;saveUi();render()}
+    toast(isEdit?"Guardado":`${T(it.type).l} añadid${it.type==="peli"||it.type==="serie"?"a":"o"}`);
+  });
+}
+function openRate(id){
+  const i=st.items[id];
+  openSheet(`<h2>¿Qué tal ${i.type==="libro"?"el libro":i.type==="juego"?"el juego":i.type==="serie"?"la serie":"la peli"}?</h2><p style="margin:-6px 0 12px;font-weight:600">${esc(i.title)}</p><div class="rate" style="justify-content:center">${[1,2,3,4,5].map(n=>`<button type="button" data-act="qrate" data-id="${esc(id)}" data-n="${n}" aria-label="${n} estrellas" style="font-size:2.6rem">★</button>`).join("")}</div><div class="actions" style="justify-content:center"><button class="btn ghost" data-act="close">Ahora no</button></div>`);
+}
+
+let delArm=false;
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;
+  const a=b.dataset.act;
+  switch(a){
+    case "status":st.status=b.dataset.k;saveUi();render();break;
+    case "type":st.type=b.dataset.k;saveUi();render();break;
+    case "new":openEditor(null);break;
+    case "edit":openEditor(b.dataset.id);break;
+    case "close":closeSheet();break;
+    case "start":{const i=st.items[b.dataset.id];put(Object.assign({},i,{status:"encurso",updatedAt:Date.now()}));toast("Movido a En curso");break}
+    case "finish":{const i=st.items[b.dataset.id],now=Date.now();put(Object.assign({},i,{status:"terminado",updatedAt:now,finishedAt:now}));openRate(i.id);break}
+    case "rate":openRate(b.dataset.id);break;
+    case "qrate":{const i=st.items[b.dataset.id];put(Object.assign({},i,{rating:+b.dataset.n,updatedAt:Date.now()}));closeSheet();toast(RLBL[+b.dataset.n]);break}
+    case "ftype":draft.type=b.dataset.k;drawEditor(true);break;
+    case "fstatus":draft.status=b.dataset.k;drawEditor(true);break;
+    case "fplat":draft.platform=b.dataset.v;$("#fp").value=b.dataset.v;break;
+    case "frate":{const n=+b.dataset.n;draft.rating=draft.rating===n?0:n;drawEditor(true);break}
+    case "fdel":
+      if(!delArm){delArm=true;b.textContent="¿Seguro? Toca otra vez";setTimeout(()=>delArm=false,3500);break}
+      delArm=false;del(draft.id);closeSheet();toast("Borrado");break;
+  }
+});
+$("#add").addEventListener("click",()=>openEditor(null));
+$("#q").addEventListener("input",e=>{st.q=e.target.value;render()});
+$("#sort").addEventListener("change",e=>{st.sort=e.target.value;saveUi();render()});
+
+render();
+boot();
+})();
+</script>
+</body>
+</html>
