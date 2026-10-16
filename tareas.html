@@ -278,7 +278,7 @@ const MESES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","
 const S={ready:false,tpls:[],act:[],done:[],personas:[],offset:0,hoy:"",yo:"",pending:0,syncErr:false,sheetOpen:false,filter:"todas"};
 function lsGet(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-S.me=lsGet("casa-yo","");S.filter=lsGet("casa-filtro","todas");
+S.me=lsGet("casa-yo","");S.filter="mias"; /* al abrir, siempre "Mías"; "Todas" es solo un vistazo */
 const yo=()=>S.me||S.yo;
 const PCOL=["var(--p1)","var(--p2)","var(--p3)","var(--p4)"];
 /* Responsables: uno o varios nombres separados por comas. Todo sale de la lista de personas de ⚙️. */
@@ -832,7 +832,7 @@ document.addEventListener("click",e=>{
         openSheet(`<h2>Prueba de Telegram</h2><p style="margin-top:0;color:var(--muted)">Os tiene que llegar un mensaje del bot en unos segundos.</p><div class="tpl-list">${(r.resultados||[]).map(x=>`<div class="testrow ${x.estado}"><b>${esc(x.nombre)}</b><span>${msg[x.estado]||x.estado}${x.detalle?" ("+esc(x.detalle)+")":""}</span></div>`).join("")||"<p>Añade las personas en ⚙️.</p>"}</div>${r.programados?"":`<p class="hint" style="font-size:.82rem;color:var(--late)">Los avisos del temporizador aún no están activados: en Apps Script ejecuta la función <b>activarAvisos</b> una vez.</p>`}<div class="actions"><span></span><button class="btn" data-act="config">Volver</button></div>`);
       }).catch(err=>{b.disabled=false;b.textContent="Probar avisos";fail(err)});
       break}
-    case "filt":S.filter=b.dataset.k;lsSet("casa-filtro",S.filter);render();break;
+    case "filt":S.filter=b.dataset.k;render();break;
     case "assign":{
       e.preventDefault();e.stopPropagation();
       const id=b.dataset.id;if(id.startsWith("tmp-"))break;

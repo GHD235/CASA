@@ -129,7 +129,7 @@ function make(app){
   var f=document.createElement("iframe");
   f.className="app";f.title=app;f.setAttribute("allow","clipboard-read; clipboard-write; web-share");
   f.addEventListener("load",function(){f.ready=true;try{f.contentWindow.__casaShow(app===cur)}catch(e){}});
-  f.src=app+".html?v=2026-10-16.1";
+  f.src=app+".html?v=2026-10-16.2";
   document.body.appendChild(f);frames[app]=f;return f;
 }
 function show(app){
