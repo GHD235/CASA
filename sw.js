@@ -1,11 +1,11 @@
 /* Apps casa · guarda las pantallas en el móvil para que abran al momento.
    Los datos (la hoja) nunca pasan por aquí: siempre van directos a Google. */
-const V = 'casa-2026-10-16.2';
+const V = 'casa-2026-10-16.3';
 const FILES = ['./', 'index.html', 'inicio.html', 'menu.html', 'ocio.html', 'tareas.html', 'config.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-48.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(V).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(V).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k))))

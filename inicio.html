@@ -243,9 +243,22 @@ function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";C.open
 $("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
 function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||""}
+/* Se abre al momento con lo último guardado en el móvil y se pone al día por detrás */
+function cachedCasa(){
+  try{if(window.parent!==window&&window.parent.casaBoot){const b=window.parent.casaBoot("tareas");if(b&&b.ok)return b.data}}catch(e){}
+  try{return JSON.parse(localStorage.getItem("casa-ajustes")||"null")}catch(e){return null}
+}
+function sig(d){return JSON.stringify([d.personasFull,d.tgBot,d.appUrl])}
 function openCasa(){
-  openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Cargando…</p>`);
-  api("casa.load").then(d=>{setCasa(d);if(C.open)drawCasa()}).catch(e=>{closeSheet();fail(e)});
+  const c=cachedCasa();C.dirty=false;
+  if(c&&c.personasFull){setCasa(c);drawCasa()}
+  else openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Cargando…</p>`);
+  const before=c&&c.personasFull?sig(c):"";
+  api("casa.load").then(d=>{
+    try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail}))}catch(e){}
+    if(!C.open||C.dirty)return;
+    if(sig(d)!==before){setCasa(d);drawCasa()}
+  }).catch(e=>{if(!before){closeSheet();fail(e)}});
 }
 function tgSetup(){return `<b>Avisos por Telegram</b>: primero cread vuestro bot (una vez, 2 minutos):<br>1. En Telegram busca <b>@BotFather</b> y pulsa <b>Iniciar</b>.<br>2. Mándale <b>/newbot</b>. Te pide un nombre (por ejemplo <i>Tareas de casa</i>) y un usuario que acabe en <b>bot</b>.<br>3. Te contesta con un <b>token</b>, algo como <i>123456789:AAH…</i>. Cópialo entero y pégalo aquí:<div class="tgrow"><input id="tgtoken" placeholder="Token del bot" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn" data-act="tgsave">Guardar</button></div>`}
 function waLink(p){const url="https://t.me/"+C.tgBot+"?start="+p.code;return "https://wa.me/?text="+encodeURIComponent("Hola "+p.nombre+" 👋 Para recibir los avisos de Tareas de casa, abre este enlace y pulsa Iniciar: "+url)}
@@ -291,13 +304,14 @@ function tgCheck(manual){
 }
 document.addEventListener("visibilitychange",()=>{if(C.tgWait&&C.open&&document.visibilityState==="visible")setTimeout(()=>tgCheck(false),1500)});
 $("#cfgbtn").addEventListener("click",openCasa);
-const reload=d=>{setCasa(d);drawCasa()};
+$("#sheet").addEventListener("input",()=>{C.dirty=true});
+const reload=d=>{setCasa(d);C.dirty=false;try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail}))}catch(e){}drawCasa()};
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]");if(!b||!$("#sheet").contains(b))return;
   switch(b.dataset.act){
     case "close":closeSheet();break;
-    case "addppl":$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:""}));{const r=document.querySelectorAll(".pplrow .pn");r[r.length-1].focus()}break;
-    case "rmppl":b.closest(".pplrow").remove();break;
+    case "addppl":C.dirty=true;$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:""}));{const r=document.querySelectorAll(".pplrow .pn");r[r.length-1].focus()}break;
+    case "rmppl":C.dirty=true;b.closest(".pplrow").remove();break;
     case "savepeople":{
       const full=pplForm();if(!full.length){toast("Añade al menos una persona");break}
       b.disabled=true;b.textContent="Guardando…";
