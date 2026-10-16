@@ -258,7 +258,7 @@ section{margin-top:22px}
   <header class="top">
     <h1 class="brand"><small id="today">Hoy</small>Tareas de casa</h1>
     <div class="topbtns"><button class="iconbtn" data-act="tpls" aria-label="Plantillas"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></button>
-    <button class="iconbtn" data-act="config" aria-label="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
+
   </div>
   </header>
   <div class="subbar"><a href="#casa:inicio" target="_top">← Todas las apps</a><span class="sync" id="sync">Al día</span></div>
@@ -333,7 +333,8 @@ function fail(e){const c=e&&e.code;
   else toast(String(c||"error"))}
 function apply(d){
   S.tpls=d.plantillas||[];S.act=d.activas||[];S.done=d.hechas||[];S.personas=d.personas||[];S.personasFull=d.personasFull||S.personas.map(n=>({nombre:n,email:"",chat:""}));S.tgBot=d.tgBot||"";S.appUrl=d.appUrl||"";S.avisoModo=d.avisoModo||"resp";S.miEmail=d.miEmail||"";
-  S.offset=(d.now||Date.now())-Date.now();S.hoy=d.hoy||ymd(new Date());S.yo=d.yo||"";S.ready=true;render();
+  S.offset=(d.now||Date.now())-Date.now();S.hoy=d.hoy||ymd(new Date());S.yo=d.yo||"";if(S.yo&&S.personas.includes(S.yo)&&S.me!==S.yo){S.me=S.yo;lsSet("casa-yo",S.me)}   /* con enlace de acceso ya se sabe quién eres */
+  S.ready=true;render();
 }
 /* Cambio instantáneo en pantalla + guardado en el servidor, que devuelve el estado real. */
 function run(action,payload,optimistic,okMsg){

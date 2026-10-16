@@ -128,6 +128,10 @@ button{font:inherit;color:inherit}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
 .loading{color:var(--muted);text-align:center;padding:40px 0}
 .acclist{display:grid;gap:8px;margin:10px 0 12px}
+.avchk{display:flex;gap:10px;align-items:center;font-size:.9rem;padding:4px 0}
+.avchk input{width:20px;height:20px;accent-color:var(--accent)}
+#testres{display:grid;gap:6px}
+#testres:empty{display:none}
 .accrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
 .accrow span{font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .accbtn{flex:none;display:inline-block;padding:9px 12px;border-radius:10px;background:var(--accent);color:var(--accent-ink)!important;font-weight:700;font-size:.82rem;text-decoration:none}
@@ -237,25 +241,25 @@ function api(action,payload){
 let toastT;
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800)}
 function fail(e){const c=e&&e.code;toast(c==="red"?"Sin conexión. No se ha guardado.":c==="sin_acceso"?"Tu cuenta no tiene acceso a la hoja.":String(c||"error"))}
-const C={personasFull:[],tgBot:"",appUrl:"",miEmail:"",open:false,tgWait:false};
+const C={personasFull:[],tgBot:"",appUrl:"",miEmail:"",avisoModo:"resp",yo:"",open:false,tgWait:false};
 function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;C.open=true}
 function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";C.open=false}
 $("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
-function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||""}
+function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||"";C.avisoModo=d.avisoModo||"resp";C.yo=d.yo||""}
 /* Se abre al momento con lo último guardado en el móvil y se pone al día por detrás */
 function cachedCasa(){
   try{if(window.parent!==window&&window.parent.casaBoot){const b=window.parent.casaBoot("tareas");if(b&&b.ok)return b.data}}catch(e){}
   try{return JSON.parse(localStorage.getItem("casa-ajustes")||"null")}catch(e){return null}
 }
-function sig(d){return JSON.stringify([d.personasFull,d.tgBot,d.appUrl])}
+function sig(d){return JSON.stringify([d.personasFull,d.tgBot,d.appUrl,d.avisoModo||"resp",d.yo||""])}
 function openCasa(){
   const c=cachedCasa();C.dirty=false;
   if(c&&c.personasFull){setCasa(c);drawCasa()}
   else openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Cargando…</p>`);
   const before=c&&c.personasFull?sig(c):"";
   api("casa.load").then(d=>{
-    try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail}))}catch(e){}
+    try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail,avisoModo:d.avisoModo,yo:d.yo}))}catch(e){}
     if(!C.open||C.dirty)return;
     if(sig(d)!==before){setCasa(d);drawCasa()}
   }).catch(e=>{if(!before){closeSheet();fail(e)}});
@@ -290,8 +294,26 @@ function drawCasa(){
     </div>
     <div class="field"><span class="flabel">Acceso a la app</span><div class="wahelp">${appBox()}</div></div>
     <div class="field"><span class="flabel">Avisos por Telegram</span><div class="wahelp">${tgBox()}</div>
-      <span class="hint">Para desvincular a alguien, toca su «Telegram ✔» dos veces. Cuándo y a quién avisar se elige en ⚙️ de Tareas.</span></div>
+      <span class="hint">Para desvincular a alguien, toca su «Telegram ✔» dos veces.</span></div>
+    ${avisosBox()}
     <div class="actions"><span></span><button type="button" class="btn ghost" data-act="close">Cerrar</button></div>`);
+}
+/* Avisos de Tareas y quién usa este móvil (antes estaban en ⚙️ de Tareas) */
+function lsG(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
+function lsS(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function nombres(){return C.personasFull.map(p=>p.nombre).filter(Boolean)}
+function avisosBox(){
+  const ps=nombres(),porEnlace=ps.includes(C.yo),me=porEnlace?C.yo:lsG("casa-yo","");
+  return `<div class="field"><span class="flabel">Avisos de Tareas</span>
+      <span class="hint" style="margin-top:-2px">Los temporizadores avisan a:</span>
+      <div class="seg"><button type="button" data-act="amode" data-k="resp" aria-pressed="${C.avisoModo!=="todos"}">A quien le toca</button><button type="button" data-act="amode" data-k="todos" aria-pressed="${C.avisoModo==="todos"}">A todos</button></div>
+      <span class="hint">Los avisos “al momento” (te toca, tareas nuevas, puedo / no puedo) llegan en el acto. Los del temporizador, cuando termina.</span>
+      <label class="avchk"><input type="checkbox" id="avisochk" ${lsG("casa-aviso","1")!=="0"?"checked":""}><span>Mandar avisos desde este móvil</span></label>
+      <button type="button" class="btn ghost" data-act="testaviso">Probar avisos</button>
+      <span class="hint">Manda un mensaje de prueba por Telegram a cada persona.</span>
+      <div id="testres"></div>
+    </div>
+    ${ps.length?`<div class="field"><span class="flabel">En este móvil soy</span>${porEnlace?`<div class="wahelp" style="margin:0">Eres <b>${esc(me)}</b>: lo sabe por tu enlace de acceso.</div>`:`<div class="seg">${ps.map(p=>`<button type="button" data-act="iam" data-p="${esc(p)}" aria-pressed="${me===p}">${esc(p)}</button>`).join("")}</div><span class="hint">Así Tareas sabe cuáles son las tuyas.</span>`}</div>`:""}`;
 }
 /* Al volver de Telegram tras pulsar Vincular: mira quién ha pulsado Iniciar */
 function tgCheck(manual){
@@ -305,12 +327,23 @@ function tgCheck(manual){
 }
 document.addEventListener("visibilitychange",()=>{if(C.tgWait&&C.open&&document.visibilityState==="visible")setTimeout(()=>tgCheck(false),1500)});
 $("#cfgbtn").addEventListener("click",openCasa);
-$("#sheet").addEventListener("input",()=>{C.dirty=true});
-const reload=d=>{setCasa(d);C.dirty=false;try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail}))}catch(e){}drawCasa()};
+document.addEventListener("change",e=>{if(e.target&&e.target.id==="avisochk")lsS("casa-aviso",e.target.checked?"1":"0")});
+$("#sheet").addEventListener("input",e=>{if(e.target.id!=="avisochk")C.dirty=true});
+const reload=d=>{setCasa(d);C.dirty=false;try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail,avisoModo:d.avisoModo,yo:d.yo}))}catch(e){}drawCasa()};
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]");if(!b||!$("#sheet").contains(b))return;
   switch(b.dataset.act){
     case "close":closeSheet();break;
+    case "amode":{const m=b.dataset.k;document.querySelectorAll('[data-act="amode"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+      api("casa.avisoModo",{modo:m}).then(d=>{C.avisoModo=d.avisoModo||m;toast(m==="todos"?"Los avisos del temporizador llegarán a todos":"Los avisos del temporizador llegarán a quien le toca")}).catch(fail);break}
+    case "iam":lsS("casa-yo",b.dataset.p);document.querySelectorAll('[data-act="iam"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));toast("Hola, "+b.dataset.p);break;
+    case "testaviso":{
+      b.disabled=true;b.textContent="Enviando…";const box=$("#testres");if(box)box.innerHTML="";
+      const msg={ok:"mensaje enviado ✔",falta:"aún no ha vinculado Telegram",sinbot:"falta crear el bot",error:"no se ha podido enviar"};
+      api("casa.testAviso",{}).then(r=>{b.disabled=false;b.textContent="Probar avisos";const x=$("#testres");if(!x)return;
+        x.innerHTML=(r.resultados||[]).map(t=>`<div class="testrow ${esc(t.estado)}"><b>${esc(t.nombre)}</b><span>${msg[t.estado]||esc(t.estado)}${t.detalle?" ("+esc(t.detalle)+")":""}</span></div>`).join("")+(r.programados?"":`<span class="hint" style="color:var(--late)">Los avisos del temporizador aún no están activados: en Apps Script ejecuta la función <b>activarAvisos</b> una vez.</span>`);
+      }).catch(err=>{b.disabled=false;b.textContent="Probar avisos";fail(err)});
+      break}
     case "addppl":C.dirty=true;$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:""}));{const r=document.querySelectorAll(".pplrow .pn");r[r.length-1].focus()}break;
     case "rmppl":C.dirty=true;b.closest(".pplrow").remove();break;
     case "savepeople":{
