@@ -344,6 +344,8 @@ function run(action,payload,optimistic,okMsg){
   return api(action,payload).then(d=>{S.pending--;setSync();if(!S.pending)apply(d);if(okMsg)toast(typeof okMsg==="function"?okMsg(d):okMsg)})
     .catch(e=>{S.pending--;S.syncErr=true;setSync();fail(e);refresh(true)});
 }
+/* Datos nuevos que trae la app principal (sin recargar la pantalla) */
+window.__casaData=function(d){if(d&&!S.pending&&!S.sheetOpen)apply(d)};
 function refresh(force){
   if(!force&&(S.pending||S.sheetOpen||document.visibilityState!=="visible"))return;
   api("casa.load").then(d=>{if(!S.pending)apply(d)}).catch(()=>{});

@@ -38,7 +38,7 @@ window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d)
 :root{
   --bg:#EEF0F3; --surface:#FFFFFF; --ink:#1A1F26; --muted:#5F6874; --line:#DADFE6;
   --menu:#2F6B45; --menu-soft:#E2EEE4; --ocio:#3B2FD9; --ocio-soft:#E6E4FB; --tup:#D9680F;
-  --casa:#0E7C86; --casa-soft:#DDEEEF; --late:#C62828;
+  --casa:#0E7C86; --casa-soft:#DDEEEF; --late:#C62828; --cerebro:#1F8A4C; --cerebro-soft:#E3F3E9;
   --shadow:0 1px 2px rgba(26,31,38,.06),0 8px 24px rgba(26,31,38,.08);
   --accent:#0E7C86; --accent-ink:#FFFFFF; --soft:#DDEEEF; --ready:#1F8A4C; --danger:#B3261E;
   --f-display:"Bricolage Grotesque",ui-rounded,"Segoe UI",system-ui,sans-serif;
@@ -47,7 +47,7 @@ window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d)
 @media (prefers-color-scheme: dark){:root{
   --bg:#101318; --surface:#191D24; --ink:#E9EDF2; --muted:#9AA3AE; --line:#2A303A;
   --menu:#74C38F; --menu-soft:#1C2B22; --ocio:#9C93FF; --ocio-soft:#221F3D; --tup:#F2A057;
-  --casa:#4FC3C9; --casa-soft:#1B2E31; --late:#FF7A70;
+  --casa:#4FC3C9; --casa-soft:#1B2E31; --late:#FF7A70; --cerebro:#5BD18C; --cerebro-soft:#16241B;
   --accent:#4FC3C9; --accent-ink:#0B1516; --soft:#1B2E31; --ready:#5BD18C; --danger:#F2867E;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); color-scheme:dark}}
 
@@ -75,6 +75,7 @@ h1{font-family:var(--f-display);font-weight:800;font-size:2.1rem;line-height:1.0
 .ico svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.9}
 .ico.logo{width:52px;height:52px;background:none;border-radius:0}
 .ico.logo img{width:52px;height:52px;display:block}
+.ico.logo svg{width:52px;height:52px;stroke:var(--cerebro);stroke-width:3.4}
 .name{font-family:var(--f-display);font-weight:800;font-size:1.15rem;line-height:1.1;margin:0}
 .info{margin-top:auto;display:grid;gap:4px;font-size:.82rem;min-width:0}
 .info .lbl{font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
@@ -132,6 +133,14 @@ button{font:inherit;color:inherit}
 .avchk input{width:20px;height:20px;accent-color:var(--accent)}
 #testres{display:grid;gap:6px}
 #testres:empty{display:none}
+.pushrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.pushrow b{color:var(--ink)}
+.pushrow small{grid-column:1/-1;color:var(--muted)}
+.pushrow .seg button{padding:5px 9px;font-size:.78rem}
+.wahelp textarea{width:100%;min-height:84px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;font:12px/1.4 ui-monospace,monospace;color:var(--ink)}
+.wahelp .stack{display:grid;gap:8px;margin-top:8px}
+.pushme{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+.pushme b.on{color:var(--ready)}
 .accrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
 .accrow span{font-weight:600;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .accbtn{flex:none;display:inline-block;padding:9px 12px;border-radius:10px;background:var(--accent);color:var(--accent-ink)!important;font-weight:700;font-size:.82rem;text-decoration:none}
@@ -162,6 +171,11 @@ button{font:inherit;color:inherit}
       <span class="ico logo"><img data-logo="tareas" alt="" width="52" height="52"></span>
       <p class="name">Tareas de casa</p>
       <div class="info" id="i-casa"><span class="none">Lavadora, lavavajillas y limpieza</span></div>
+    </a>
+    <a class="tile wide" id="t-cerebro" hidden href="#casa:cerebro" target="_top" style="--c:var(--cerebro);--soft:var(--cerebro-soft)">
+      <span class="ico logo"><svg width="52" height="52" viewBox="0 0 64 64" fill="none" stroke="var(--cerebro)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M32 2v7M18 7l4 5M46 7l-4 5"/><path d="M31 20c-2-4-9-5-12-1-4 0-7 4-5 8-4 2-4 9 1 11-1 5 4 9 9 7 2 3 6 3 7 1V20z"/><path d="M33 20c2-4 9-5 12-1 4 0 7 4 5 8 4 2 4 9-1 11 1 5-4 9-9 7-2 3-6 3-7 1V20z"/><path d="M24 29c-2 1-2 5 0 6M40 29c2 1 2 5 0 6"/></svg></span>
+      <p class="name">Segundo cerebro</p>
+      <div class="info" id="i-cerebro"><span class="none">Solo tú · documentos y vencimientos</span></div>
     </a>
   </nav>
   <div class="err" id="err" hidden></div>
@@ -225,6 +239,10 @@ if(c){
   if(c.pendientes)ht+=`${c.enMarcha.length?"":`<span class="lbl">Pendientes</span>`}<span>${c.pendientes} por hacer${c.atrasadas?` · <span class="late">${c.atrasadas} atrasada${c.atrasadas>1?"s":""}</span>`:""}</span>`;
   $("#i-casa").innerHTML=ht||`<span class="none">Lavadora, lavavajillas y limpieza</span>`;
 }
+/* Segundo cerebro: solo le sale a su dueño */
+const cb=d.cerebro,tc=$("#t-cerebro");
+if(tc){tc.hidden=!cb;if(cb){const MS=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],p=cb.prox;
+  $("#i-cerebro").innerHTML=p?`<span class="lbl">Próximo vencimiento</span><span class="row"><b>${esc(p.titulo)}</b><span>${+p.vence.slice(8)} ${MS[+p.vence.slice(5,7)-1]}</span></span>`:`<span class="none">${cb.n?cb.n+(cb.n===1?" documento":" documentos")+" · solo tú":"Solo tú · documentos y vencimientos"}</span>`}}
 
 }
 
@@ -241,25 +259,26 @@ function api(action,payload){
 let toastT;
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800)}
 function fail(e){const c=e&&e.code;toast(c==="red"?"Sin conexión. No se ha guardado.":c==="sin_acceso"?"Tu cuenta no tiene acceso a la hoja.":String(c||"error"))}
-const C={personasFull:[],tgBot:"",appUrl:"",miEmail:"",avisoModo:"resp",yo:"",open:false,tgWait:false};
+const C={personasFull:[],tgBot:"",appUrl:"",miEmail:"",avisoModo:"resp",yo:"",pushWeb:null,pushSA:false,pushDisp:{},pushEdit:false,open:false,tgWait:false};
 function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;C.open=true}
 function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";C.open=false}
 $("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#backdrop").hidden)closeSheet()});
-function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||"";C.avisoModo=d.avisoModo||"resp";C.yo=d.yo||""}
+function setCasa(d){C.personasFull=d.personasFull||[];C.tgBot=d.tgBot||"";C.appUrl=d.appUrl||"";C.miEmail=d.miEmail||"";C.avisoModo=d.avisoModo||"resp";C.yo=d.yo||"";C.pushWeb=d.pushWeb||null;C.pushSA=!!d.pushSA;C.pushDisp=d.pushDisp||{}}
 /* Se abre al momento con lo último guardado en el móvil y se pone al día por detrás */
 function cachedCasa(){
   try{if(window.parent!==window&&window.parent.casaBoot){const b=window.parent.casaBoot("tareas");if(b&&b.ok)return b.data}}catch(e){}
   try{return JSON.parse(localStorage.getItem("casa-ajustes")||"null")}catch(e){return null}
 }
-function sig(d){return JSON.stringify([d.personasFull,d.tgBot,d.appUrl,d.avisoModo||"resp",d.yo||""])}
+function sig(d){return JSON.stringify([d.personasFull,d.tgBot,d.appUrl,d.avisoModo||"resp",d.yo||"",d.pushWeb||null,!!d.pushSA,d.pushDisp||{}])}
+function casaKeep(d){try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail,avisoModo:d.avisoModo,yo:d.yo,pushWeb:d.pushWeb,pushSA:d.pushSA,pushDisp:d.pushDisp}))}catch(e){}}
 function openCasa(){
   const c=cachedCasa();C.dirty=false;
   if(c&&c.personasFull){setCasa(c);drawCasa()}
   else openSheet(`<h2>Ajustes de la casa</h2><p class="sub">Cargando…</p>`);
   const before=c&&c.personasFull?sig(c):"";
   api("casa.load").then(d=>{
-    try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail,avisoModo:d.avisoModo,yo:d.yo}))}catch(e){}
+    casaKeep(d);
     if(!C.open||C.dirty)return;
     if(sig(d)!==before){setCasa(d);drawCasa()}
   }).catch(e=>{if(!before){closeSheet();fail(e)}});
@@ -293,11 +312,49 @@ function drawCasa(){
       <div class="actions"><span></span><button type="button" class="btn" data-act="savepeople">Guardar personas</button></div>
     </div>
     <div class="field"><span class="flabel">Acceso a la app</span><div class="wahelp">${appBox()}</div></div>
+    <div class="field"><span class="flabel">Notificaciones de la app</span><div class="wahelp">${pushBox()}</div></div>
     <div class="field"><span class="flabel">Avisos por Telegram</span><div class="wahelp">${tgBox()}</div>
       <span class="hint">Para desvincular a alguien, toca su «Telegram ✔» dos veces.</span></div>
     ${avisosBox()}
     <div class="actions"><span></span><button type="button" class="btn ghost" data-act="close">Cerrar</button></div>`);
 }
+/* ---------- Notificaciones de la app (Firebase) ---------- */
+function pushApi(){try{return window.parent!==window&&window.parent.casaPush||null}catch(e){return null}}
+function pushState(){const P=pushApi();if(!P)return "no";try{return P.state()}catch(e){return "no"}}
+function pushSetup(){
+  const faltaWeb=!C.pushWeb||C.pushEdit,faltaSA=!C.pushSA||C.pushEdit;
+  return `Para que los avisos salgan como notificaciones de la app (sin Telegram), pega aquí lo que preparaste en Firebase:
+    <div class="stack">
+    ${faltaWeb?`<textarea id="fbcfg" placeholder="const firebaseConfig = { apiKey: &quot;…&quot;, … };" spellcheck="false" autocapitalize="off"></textarea>
+    <input id="fbvapid" placeholder="Clave de «Certificados push web»" autocomplete="off" autocapitalize="off" spellcheck="false">`:""}
+    ${faltaSA?`<label class="btn ghost" style="text-align:center">Elegir el archivo .json de la cuenta de servicio<input type="file" id="fbsa" accept=".json,application/json" hidden></label><span class="hint" id="fbsaname">Solo se guarda en tu Apps Script: nunca vuelve a salir.</span>`:""}
+    <button type="button" class="btn" data-act="pushsave">Guardar</button>
+    ${C.pushEdit?`<button type="button" class="lnk" data-act="pushcancel">Cancelar</button>`:""}
+    </div>`;
+}
+function pushMe(){
+  const st=pushState(),n=(C.pushDisp[C.yo]||[]).length;
+  if(st==="on")return `<div class="pushme"><b class="on">✔ Activadas en este móvil</b><button type="button" class="lnk" data-act="pushoff">Desactivar</button></div>`;
+  if(st==="off")return `<div class="pushme"><button type="button" class="btn" data-act="pushon">Activar en este móvil</button></div>`;
+  if(st==="bloqueado")return `<div class="pushme">Este navegador tiene bloqueadas las notificaciones de la app. Actívalas en sus ajustes (Notificaciones → permitir para esta web) y vuelve aquí.</div>`;
+  if(st==="ios-instalar")return `<div class="pushme">En iPhone primero hay que añadir la app a la pantalla de inicio: en Safari, <b>Compartir → Añadir a pantalla de inicio</b>. Ábrela desde ese icono y actívalas aquí.</div>`;
+  return `<div class="pushme">Desde aquí no se pueden activar. Usa la app de GitHub: en Android con Chrome; en iPhone, añadida a la pantalla de inicio.${n?` (Ya tienes ${n} ${n===1?"móvil":"móviles"} con la app activada.)`:""}</div>`;
+}
+function pushBox(){
+  if(!C.pushWeb||!C.pushSA||C.pushEdit)return pushSetup();
+  const ps=C.personasFull;
+  return `<b>Este móvil</b>${pushMe()}
+    <span class="hint">Cada persona las activa una vez en cada móvil que use.</span>
+    <div style="margin-top:8px">${ps.map(p=>{const d=C.pushDisp[p.nombre]||[],c=p.canal==="app"||p.canal==="tg"?p.canal:(d.length?"app":"tg");
+      return `<div class="pushrow"><span><b>${esc(p.nombre)}</b> · ${d.length?`📱 ${d.length===1?esc(d[0]):d.length+" móviles"}`:"sin la app activada"}${p.chat?" · Telegram ✔":""}</span>
+      <div class="seg">${[["app","App"],["tg","Telegram"]].map(([k,l])=>`<button type="button" data-act="canal" data-n="${esc(p.nombre)}" data-k="${k}" aria-pressed="${c===k}">${l}</button>`).join("")}</div>
+      ${c==="app"&&!d.length?`<small style="color:var(--late)">Así no le llegará nada hasta que active la app en su móvil.</small>`:c==="tg"&&!p.chat?`<small style="color:var(--late)">No tiene Telegram vinculado: así no le llegará nada.</small>`:""}</div>`}).join("")}</div>
+    <span class="hint">Cada persona recibe los avisos por un solo sitio: la app o Telegram. Al activar la app en su móvil pasa a «App».</span>
+    <br><button type="button" class="lnk" data-act="pushreset">Cambiar la configuración de Firebase</button>`;
+}
+function parseFirebase(t){const o={};String(t||"").replace(/(apiKey|authDomain|projectId|storageBucket|messagingSenderId|appId)\s*["']?\s*:\s*["']([^"']+)["']/g,(m,k,v)=>{o[k]=v});return o}
+function leerArchivo(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result||""));r.onerror=()=>rej({code:"No se pudo leer el archivo"});r.readAsText(f)})}
+
 /* Avisos de Tareas y quién usa este móvil (antes estaban en ⚙️ de Tareas) */
 function lsG(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
 function lsS(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -327,21 +384,46 @@ function tgCheck(manual){
 }
 document.addEventListener("visibilitychange",()=>{if(C.tgWait&&C.open&&document.visibilityState==="visible")setTimeout(()=>tgCheck(false),1500)});
 $("#cfgbtn").addEventListener("click",openCasa);
-document.addEventListener("change",e=>{if(e.target&&e.target.id==="avisochk")lsS("casa-aviso",e.target.checked?"1":"0")});
+document.addEventListener("change",e=>{if(e.target&&e.target.id==="avisochk")lsS("casa-aviso",e.target.checked?"1":"0");if(e.target&&e.target.id==="fbsa"){const f=e.target.files&&e.target.files[0],n=$("#fbsaname");if(n&&f)n.textContent="Archivo: "+f.name}});
 $("#sheet").addEventListener("input",e=>{if(e.target.id!=="avisochk")C.dirty=true});
-const reload=d=>{setCasa(d);C.dirty=false;try{localStorage.setItem("casa-ajustes",JSON.stringify({personasFull:d.personasFull,tgBot:d.tgBot,appUrl:d.appUrl,miEmail:d.miEmail,avisoModo:d.avisoModo,yo:d.yo}))}catch(e){}drawCasa()};
+const reload=d=>{setCasa(d);C.dirty=false;casaKeep(d);drawCasa()};
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]");if(!b||!$("#sheet").contains(b))return;
   switch(b.dataset.act){
     case "close":closeSheet();break;
+    case "pushsave":{
+      const ta=$("#fbcfg"),vp=$("#fbvapid"),fi=$("#fbsa"),file=fi&&fi.files&&fi.files[0];
+      let p=Promise.resolve(null);
+      if(ta){const cfg=parseFirebase(ta.value);cfg.vapidKey=(vp&&vp.value||"").trim();
+        if(!cfg.apiKey||!cfg.appId){toast("Pega el bloque firebaseConfig entero");break}
+        if(!cfg.vapidKey){toast("Falta la clave de «Certificados push web»");break}
+        p=p.then(()=>api("casa.pushWeb",{cfg}))}
+      if(fi&&!file&&!C.pushSA){toast("Elige el archivo .json de la cuenta de servicio");break}
+      if(file)p=p.then(()=>leerArchivo(file)).then(txt=>api("casa.pushSA",{sa:txt}));
+      b.disabled=true;b.textContent="Comprobando…";
+      p.then(d=>{if(d){C.pushEdit=false;reload(d);toast("Notificaciones listas: actívalas en este móvil")}else{C.pushEdit=false;drawCasa()}})
+       .catch(e=>{b.disabled=false;b.textContent="Guardar";fail(e)});
+      break}
+    case "pushcancel":C.pushEdit=false;drawCasa();break;
+    case "pushreset":C.pushEdit=true;drawCasa();break;
+    case "pushon":{
+      const P=pushApi();if(!P)break;
+      b.disabled=true;b.textContent="Activando…";
+      const go=()=>P.enable(C.pushWeb).then(r=>{if(!r||!r.ok)throw {code:(r&&r.error)||"error"};reload(r.data);toast("Notificaciones activadas en este móvil")});
+      go().catch(e=>{b.disabled=false;b.textContent="Activar en este móvil";fail(e&&e.code?e:{code:String(e&&e.message||e)})});
+      break}
+    case "pushoff":{const P=pushApi();if(!P)break;P.disable().then(r=>{if(r&&r.ok)reload(r.data);else drawCasa();toast("Desactivadas en este móvil")}).catch(fail);break}
+    case "canal":{const n=b.dataset.n,k=b.dataset.k;b.closest(".seg").querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+      api("casa.canal",{nombre:n,canal:k}).then(d=>{reload(d);toast(n+": "+(k==="app"?"avisos por la app":"avisos por Telegram"))}).catch(fail);break}
     case "amode":{const m=b.dataset.k;document.querySelectorAll('[data-act="amode"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
       api("casa.avisoModo",{modo:m}).then(d=>{C.avisoModo=d.avisoModo||m;toast(m==="todos"?"Los avisos del temporizador llegarán a todos":"Los avisos del temporizador llegarán a quien le toca")}).catch(fail);break}
     case "iam":lsS("casa-yo",b.dataset.p);document.querySelectorAll('[data-act="iam"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));toast("Hola, "+b.dataset.p);break;
     case "testaviso":{
       b.disabled=true;b.textContent="Enviando…";const box=$("#testres");if(box)box.innerHTML="";
-      const msg={ok:"mensaje enviado ✔",falta:"aún no ha vinculado Telegram",sinbot:"falta crear el bot",error:"no se ha podido enviar"};
+      const txt=(x)=>({ok:"enviado ✔"+(x.detalle?" ("+x.detalle+")":""),falta:x.via==="app"?"no la ha activado en ningún móvil":"no ha vinculado Telegram",sinconfig:"falta configurar Firebase",sinbot:"falta crear el bot",error:"no se ha podido enviar"+(x.detalle?" ("+x.detalle+")":"")}[x.estado]||x.estado);
       api("casa.testAviso",{}).then(r=>{b.disabled=false;b.textContent="Probar avisos";const x=$("#testres");if(!x)return;
-        x.innerHTML=(r.resultados||[]).map(t=>`<div class="testrow ${esc(t.estado)}"><b>${esc(t.nombre)}</b><span>${msg[t.estado]||esc(t.estado)}${t.detalle?" ("+esc(t.detalle)+")":""}</span></div>`).join("")+(r.programados?"":`<span class="hint" style="color:var(--late)">Los avisos del temporizador aún no están activados: en Apps Script ejecuta la función <b>activarAvisos</b> una vez.</span>`);
+        x.innerHTML=(r.resultados||[]).map(t=>{const ps=t.partes||[{via:"tg",estado:t.estado,detalle:t.detalle}],ok=ps.some(q=>q.estado==="ok");
+          return `<div class="testrow ${ok?"ok":ps[0]?esc(ps[0].estado):""}"><b>${esc(t.nombre)}</b>${ps.map(q=>`<span${q.estado==="ok"?"":` style="color:var(--late)"`}>${q.via==="app"?"App":"Telegram"}: ${esc(txt(q))}</span>`).join("")}</div>`}).join("")+(r.programados?"":`<span class="hint" style="color:var(--late)">Los avisos del temporizador aún no están activados: en Apps Script ejecuta la función <b>activarAvisos</b> una vez.</span>`);
       }).catch(err=>{b.disabled=false;b.textContent="Probar avisos";fail(err)});
       break}
     case "addppl":C.dirty=true;$("#pplrows").insertAdjacentHTML("beforeend",pplRow({nombre:"",email:""}));{const r=document.querySelectorAll(".pplrow .pn");r[r.length-1].focus()}break;

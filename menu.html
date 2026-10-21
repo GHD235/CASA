@@ -331,6 +331,8 @@ function flushPlan(){
   st.pending--;st.planInflight=(st.planInflight||0)+1;
   track(api("plan.save",{semana:key,plan:body})).catch(()=>{}).finally(()=>{st.planInflight--});
 }
+/* Datos nuevos que trae la app principal (sin recargar la pantalla); si estás viendo otra semana, solo las recetas */
+window.__casaData=function(d){if(!d||st.pending||st.sheetOpen||planTimer||st.planInflight)return;applyLoad(d,d.semana!==wkKey())};
 let loadSeq=0;
 function loadWeek(quiet){
   const key=wkKey(),seq=++loadSeq;

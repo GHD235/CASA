@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+/* Apps casa · versión GitHub: esta página vive dentro de index.html, que guarda la clave y habla con la hoja. */
+(function(){
+  var P=window.parent;
+  if(P===window||!P.casaApi){location.replace("./#cerebro");return}
+  /* google.script.run -> API con clave */
+  function R(){this.s=null;this.f=null}
+  R.prototype.withSuccessHandler=function(f){this.s=f;return this};
+  R.prototype.withFailureHandler=function(f){this.f=f;return this};
+  R.prototype.api=function(b){var s=this.s,f=this.f;P.casaApi(b).then(function(r){if(s)s(r)},function(e){if(f)f(e)})};
+  var g={script:{}};Object.defineProperty(g.script,"run",{get:function(){return new R()}});window.google=g;
+  /* Solo cuenta como "visible" la app que está en pantalla (así las ocultas no consultan la hoja) */
+  var shown=false;
+  function vis(){return shown&&P.document.visibilityState==="visible"?"visible":"hidden"}
+  Object.defineProperty(document,"visibilityState",{configurable:true,get:vis});
+  Object.defineProperty(document,"hidden",{configurable:true,get:function(){return vis()!=="visible"}});
+  window.__casaShow=function(v){var was=vis();shown=!!v;if(vis()!==was)document.dispatchEvent(new Event("visibilitychange"))};
+  P.document.addEventListener("visibilitychange",function(){if(shown)document.dispatchEvent(new Event("visibilitychange"))});
+  /* Enlaces entre apps: cambian de pantalla sin recargar */
+  document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#casa:"]');if(a){e.preventDefault();e.stopPropagation();P.casaNav(a.getAttribute("href").slice(6))}},true);
+})();
+</script>
+<script>
+/* Si algo falla, se muestra en pantalla en vez de quedarse "cargando". */
+window.onerror=function(m,s,l){try{var d=document.getElementById("jserr");if(!d){d=document.createElement("div");d.id="jserr";d.setAttribute("role","alert");d.style.cssText="position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#B3261E;color:#fff;padding:10px 12px;border-radius:12px;font:13px/1.4 system-ui,sans-serif";(document.body||document.documentElement).appendChild(d)}d.textContent="Error en la app: "+m+(l?" (línea "+l+")":"")+". Haz una captura y pásamela.";}catch(e){}};
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Segundo cerebro: herramienta personal. Portada con cerebro, preguntar, carpetas; dentro de cada carpeta sus documentos. */
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --hero:#F1F9F4; --ink:#17211B; --muted:#5B6B61; --line:#E3EBE6; --soft:#EEF8F1;
+  --accent:#1F8A4C; --accent-ink:#FFFFFF; --warn:#9A2B1C; --warn-bg:#FDECE8; --danger:#B3261E; --shadow:0 12px 30px rgba(20,40,28,.16);
+  --f:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#101512; --surface:#171E1A; --hero:#16241B; --ink:#E9F1EC; --muted:#9DB0A4; --line:#26322B; --soft:#1B2A21;
+  --accent:#5BD18C; --accent-ink:#0B130E; --warn:#FF9C8A; --warn-bg:#3A1D18; --danger:#F2867E; --shadow:0 12px 30px rgba(0,0,0,.5); color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--f);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.wrap{max-width:760px;margin:0 auto;padding:16px 16px 110px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem}
+.top a,.lnk{color:var(--accent);font-weight:700;text-decoration:none;background:none;border:0;padding:0}
+.chip{font-size:.75rem;font-weight:700;color:var(--accent);background:var(--soft);border-radius:99px;padding:3px 10px}
+.hero{margin-top:12px;background:var(--hero);border-radius:22px;padding:22px 16px 18px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.hero h1{margin:6px 0 0;font-size:2.1rem;line-height:1.02;font-weight:800;letter-spacing:-.02em}
+.hero p{margin:6px 0 0;color:var(--muted)}
+.dashes{display:flex;gap:22px;margin-top:14px}.dashes i{width:20px;height:5px;border-radius:3px}
+.ask{margin-top:14px;display:flex;gap:8px;align-items:center;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:4px 4px 4px 14px}
+.ask input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:11px 0;font-size:15px}
+.go{border:0;background:var(--accent);color:var(--accent-ink);border-radius:10px;width:44px;height:44px;display:grid;place-items:center;flex:none}
+.res{margin-top:10px;display:grid;gap:8px}
+.q{display:flex;gap:12px;align-items:flex-start;background:var(--soft);border-radius:14px;padding:12px 14px}
+.a{display:flex;gap:12px;align-items:flex-start;padding:4px 14px}
+.claude{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--accent);color:var(--accent);background:none;border-radius:12px;padding:10px 14px;font-weight:700;min-height:44px}
+h2{font-size:1.05rem;font-weight:800;margin:22px 0 8px}
+.folders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:10px}
+@media (min-width:620px){.folders{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.fold{display:flex;align-items:center;gap:12px;padding:11px 4px;border:0;background:none;text-align:left;min-height:44px;border-radius:10px}
+.fold span{flex:1;min-width:0;font-weight:500}
+.fold em{font-style:normal;font-size:.8rem;color:var(--muted)}
+.venc{display:grid;gap:6px}
+.vrow{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface);text-align:left;width:100%}
+.vrow b{font-weight:700}
+.badge{flex:none;font-size:.72rem;font-weight:700;border-radius:99px;padding:4px 9px;background:var(--soft);color:var(--accent)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.list{display:flex;flex-direction:column}
+.doc{display:flex;gap:12px;align-items:center;padding:12px 2px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;width:100%}
+.ft{flex:none;width:40px;height:48px;border-radius:8px;background:var(--hero);border:1px solid var(--line);display:grid;place-items:center;font-size:.62rem;font-weight:800;color:var(--accent)}
+.doc .t{flex:1;min-width:0}.doc .t b{display:block;font-weight:700;overflow-wrap:anywhere}.doc .t small{display:block;color:var(--muted);font-size:.78rem;margin-top:2px}
+.empty{border:1px dashed var(--line);border-radius:16px;padding:22px 16px;text-align:center;color:var(--muted)}
+.fab{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));max-width:728px;margin:0 auto;border:0;border-radius:14px;min-height:52px;background:var(--accent);color:var(--accent-ink);font-weight:800;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--shadow);z-index:5}
+.backdrop{position:fixed;inset:0;background:rgba(8,14,10,.5);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:640px;max-height:92%;overflow:auto;border-radius:20px 20px 0 0;padding:8px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+.grab{width:40px;height:4px;border-radius:99px;background:var(--line);margin:4px auto 12px}
+.sheet h3{font-size:1.3rem;font-weight:800;margin:0 0 12px}
+.field{display:grid;gap:6px;margin-bottom:12px}
+.flabel{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.field textarea{min-height:90px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{border:0;border-radius:12px;padding:11px 16px;font-weight:700;background:var(--accent);color:var(--accent-ink);min-height:44px}
+.btn.ghost{background:var(--soft);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid currentColor}
+.btn:disabled{opacity:.5}
+.actions{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px}
+.filebox{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px dashed var(--line);border-radius:12px;padding:10px 12px}
+.filebox span{flex:1;min-width:0;font-size:.85rem;color:var(--muted);overflow-wrap:anywhere}
+.preview img{max-width:100%;border-radius:10px;margin-top:8px}
+.toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:12px;font-size:.88rem;font-weight:600;z-index:20;max-width:calc(100% - 32px);text-align:center}
+.priv{margin-top:40px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a href="#casa:inicio" target="_top">← Todas las apps</a><span class="chip">Solo tú</span></div>
+  <div id="app"></div>
+</div>
+<button class="fab" id="fab" hidden data-act="nuevo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 17v-6M9.5 13.5L12 11l2.5 2.5"/></svg><span id="fabtxt">Guardar un archivo</span></button>
+<div class="backdrop" id="backdrop" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+window.BOOT = (window.parent!==window&&window.parent.casaBoot)?window.parent.casaBoot("cerebro"):null;
+</script>
+<script>
+(function(){
+"use strict";
+var BOOT=window.BOOT||null;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const BRAIN=w=>`<svg width="${w}" height="${w}" viewBox="0 0 64 64" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M32 2v7M18 7l4 5M46 7l-4 5"/><path d="M31 20c-2-4-9-5-12-1-4 0-7 4-5 8-4 2-4 9 1 11-1 5 4 9 9 7 2 3 6 3 7 1V20z"/><path d="M33 20c2-4 9-5 12-1 4 0 7 4 5 8 4 2 4 9-1 11 1 5-4 9-9 7-2 3-6 3-7 1V20z"/><path d="M24 29c-2 1-2 5 0 6M40 29c2 1 2 5 0 6"/></svg>`;
+const FOLDER=`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 10h18"/></svg>`;
+const SPARK=`<svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent)" aria-hidden="true"><path d="M10 3l1.9 5.1L17 10l-5.1 1.9L10 17l-1.9-5.1L3 10l5.1-1.9z"/><path d="M18.5 13l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg>`;
+const USER=`<svg width="20" height="20" viewBox="0 0 24 24" fill="var(--accent)" aria-hidden="true"><circle cx="12" cy="8" r="4.5"/><path d="M3.5 21a8.5 8.5 0 0 1 17 0z"/></svg>`;
+const S={ok:false,priv:false,cats:[],docs:[],hoy:"",carpeta:"",cat:"",q:"",asked:"",pending:0,sheet:false,ia:false};
+
+function api(action,payload){
+  return new Promise((res,rej)=>{
+    if(!(window.google&&google.script&&google.script.run)){rej({code:"sin_servidor"});return}
+    google.script.run
+      .withSuccessHandler(r=>r&&r.ok?res(r.data):rej({code:(r&&r.error)||"error"}))
+      .withFailureHandler(e=>rej({code:"red",message:e&&e.message}))
+      .api(Object.assign({action},payload||{}));
+  });
+}
+let toastT;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2800)}
+function fail(e){const c=e&&e.code;if(/privado/.test(c||"")){S.priv=true;render();return}toast(c==="red"?"Sin conexión. No se ha guardado.":String(c||"error"))}
+function apply(d){S.ok=true;S.priv=false;S.cats=d.cats||[];S.docs=d.docs||[];S.hoy=d.hoy||S.hoy;S.carpeta=d.carpeta||"";S.ia=!!d.ia;render()}
+/* Datos nuevos que trae la app principal (sin recargar la pantalla) */
+window.__casaData=function(d){if(d&&d.docs&&!S.pending&&!S.sheet)apply(d)};
+function refresh(){if(S.pending||S.sheet||document.visibilityState!=="visible")return;api("cerebro.load").then(d=>{if(!S.pending&&!S.sheet)apply(d)}).catch(e=>{if(/privado/.test(e&&e.code||"")){S.priv=true;render()}})}
+
+/* ---------- utilidades ---------- */
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function hoy(){return S.hoy||ymd(new Date())}
+function fecha(s){if(!s)return"";const p=s.split("-");return +p[2]+" "+MES[+p[1]-1]+" "+p[0]}
+function dias(s){return Math.round((Date.parse(s+"T12:00:00Z")-Date.parse(hoy()+"T12:00:00Z"))/86400000)}
+function tipo(d){return !d.archivo?"NOTA":/pdf/.test(d.mime)?"PDF":/image/.test(d.mime)?"FOTO":"ARCH"}
+function venceTxt(d){if(!d.vence)return"";const n=dias(d.vence);return n<0?"vencido el "+fecha(d.vence):n===0?"vence hoy":n===1?"vence mañana":"vence en "+n+" días"}
+function meta(d){return [d.vence?(dias(d.vence)<0?"Venció el ":"Vence el ")+fecha(d.vence):d.fecha?fecha(d.fecha):"",d.importe,d.archivo?"":(d.notas||"").slice(0,60)].filter(Boolean).join(" · ")}
+function norm(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")}
+function buscar(q){const w=norm(q).split(/\s+/).filter(x=>x.length>2&&!["que","cuando","cuanto","donde","como","para","del","los","las","mis","una","tengo","vence","termina"].includes(x));
+  if(!w.length)return[];
+  return S.docs.map(d=>{const t=norm([d.titulo,d.carpeta,d.notas,d.nombre,d.importe].join(" "));return {d,s:w.filter(x=>t.includes(x)).length}}).filter(x=>x.s).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>x.d)}
+
+/* ---------- pantallas ---------- */
+function render(){
+  const A=$("#app");$("#fab").hidden=!S.ok||S.priv;
+  if(S.priv){A.innerHTML=`<div class="priv">${BRAIN(80)}<h2>Es privado</h2><p>El segundo cerebro solo lo puede abrir su dueño.</p></div>`;return}
+  if(!S.ok){A.innerHTML=`<div class="priv">${BRAIN(80)}<p>Cargando…</p></div>`;return}
+  if(S.cat)return renderCat();
+  $("#fabtxt").textContent="Guardar un archivo";
+  const prox=S.docs.filter(d=>d.vence&&dias(d.vence)>=0&&dias(d.vence)<=60).sort((a,b)=>a.vence<b.vence?-1:1).slice(0,4);
+  const venc=S.docs.filter(d=>d.vence&&dias(d.vence)<0&&dias(d.vence)>-31);
+  let h=`<section class="hero">${BRAIN(84)}<h1>Mi segundo cerebro</h1><p>Todo organizado. Todo buscable.</p><div class="dashes" aria-hidden="true"><i style="background:#D64545"></i><i style="background:#2F6FDB"></i><i style="background:#2E9E5B"></i><i style="background:#8B5CF6"></i></div></section>
+  <form class="ask" id="askf"><label for="askq" style="position:absolute;left:-9999px">Pregúntale lo que quieras</label>${SPARK}<input id="askq" placeholder="Pregúntale lo que quieras…" autocomplete="off" value="${esc(S.q)}"><button class="go" aria-label="Preguntar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></form>
+  <div class="res" id="res">${resHtml()}</div>`;
+  if(prox.length||venc.length)h+=`<h2>Próximos vencimientos</h2><div class="venc">${venc.concat(prox).map(d=>`<button class="vrow" data-act="ver" data-id="${esc(d.id)}"><span><b>${esc(d.titulo)}</b><br><small style="color:var(--muted)">${esc(d.carpeta)} · ${fecha(d.vence)}</small></span><span class="badge${dias(d.vence)<=30?" warn":""}">${esc(venceTxt(d))}</span></button>`).join("")}</div>`;
+  h+=`<h2>Todo en un solo lugar</h2><nav class="folders" aria-label="Carpetas">${S.cats.map(c=>{const n=S.docs.filter(d=>d.carpeta===c).length;return `<button class="fold" data-act="cat" data-c="${esc(c)}">${FOLDER}<span>${esc(c)}</span>${n?`<em>${n}</em>`:""}</button>`}).join("")}<button class="fold" data-act="newcat" style="color:var(--accent)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span style="font-weight:700">Nueva carpeta</span></button></nav>`;
+  h+=`<h2>Leer con Claude</h2><div class="vrow" style="cursor:default"><span>${S.ia?"<b>Activado</b><br><small style=\"color:var(--muted)\">Al guardar una foto o un PDF, Claude rellena los datos.</small>":"<b>Rellenar los datos solo</b><br><small style=\"color:var(--muted)\">Claude lee la foto o el PDF y pone título, carpeta, fechas, importe y notas.</small>"}</span><button class="btn ghost" data-act="ia">${S.ia?"Cambiar":"Activar"}</button></div>`;
+  A.innerHTML=h;
+}
+function resHtml(){
+  if(!S.asked)return"";
+  const r=buscar(S.asked);
+  return `<div class="q">${USER}<span>${esc(S.asked)}</span></div>
+  <div class="a">${SPARK}<span>${r.length?"En tus documentos:":"No encuentro nada con esas palabras en el índice."}</span></div>
+  ${r.map(d=>`<button class="vrow" data-act="ver" data-id="${esc(d.id)}"><span><b>${esc(d.titulo)}</b><br><small style="color:var(--muted)">${esc(d.carpeta)}${meta(d)?" · "+esc(meta(d)):""}</small></span><span class="badge${d.vence&&dias(d.vence)<=30?" warn":""}">${esc(d.vence?venceTxt(d):tipo(d))}</span></button>`).join("")}
+  <div><button class="claude" data-act="claude">${SPARK}Preguntar a Claude</button></div>`;
+}
+function renderCat(){
+  const c=S.cat,ds=S.docs.filter(d=>d.carpeta===c).sort((a,b)=>(b.fecha||b.creado||"")>(a.fecha||a.creado||"")?1:-1);
+  $("#fabtxt").textContent="Guardar en "+c;
+  $("#app").innerHTML=`<p style="margin:14px 0 0"><button class="lnk" data-act="home">← Mi segundo cerebro</button></p>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:8px">${FOLDER.replace(/24/g,"34")}<h1 style="margin:0;font-size:1.9rem;font-weight:800">${esc(c)}</h1></div>
+  <div class="list" style="margin-top:10px">${ds.length?ds.map(d=>`<button class="doc" data-act="ver" data-id="${esc(d.id)}"><span class="ft">${tipo(d)}</span><span class="t"><b>${esc(d.titulo)}</b><small>${esc(meta(d))||"&nbsp;"}</small></span>${d.vence&&dias(d.vence)<=30?`<span class="badge warn">${esc(venceTxt(d))}</span>`:""}</button>`).join(""):`<div class="empty">Aún no hay nada en ${esc(c)}. Guarda aquí fotos o PDF, o escribe una nota.</div>`}</div>`;
+}
+
+/* ---------- hoja inferior ---------- */
+function openSheet(h){$("#sheet").innerHTML='<div class="grab"></div>'+h;$("#backdrop").hidden=false;S.sheet=true}
+function closeSheet(){$("#backdrop").hidden=true;$("#sheet").innerHTML="";S.sheet=false;F=null;render()}
+$("#backdrop").addEventListener("click",e=>{if(e.target.id==="backdrop")closeSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheet)closeSheet()});
+
+let F=null,delArm=false,AUTO="",IAN=0;   /* archivo elegido: {data,mime,nombre,size,preview} */
+/* Claude lee el archivo y rellena lo que esté vacío (o el título puesto con el nombre del archivo). */
+function leerIA(payload,nuevo){
+  const st=$("#iastat");if(!st)return;const n=++IAN;
+  st.innerHTML=`<span>✨ Claude está leyendo el documento…</span>`;
+  api("cerebro.leer",payload).then(o=>{
+    if(n!==IAN||!$("#df"))return;
+    const set=(id,v)=>{const el=$(id);if(el&&v&&!el.value.trim())el.value=v};
+    if(o.titulo&&(!$("#dt").value.trim()||$("#dt").value===AUTO))$("#dt").value=o.titulo;
+    if(o.carpeta&&nuevo&&!S.cat)$("#dc").value=o.carpeta;
+    set("#df1",o.fecha);set("#dv",o.vence);set("#di",o.importe);set("#dn",o.notas);
+    st.innerHTML=`<span style="color:var(--accent);font-weight:700">✨ Rellenado por Claude: revísalo antes de guardar.</span>`;
+  }).catch(e=>{if(n!==IAN)return;const c=e&&e.code;st.innerHTML=`<span style="color:var(--warn)">${esc(c==="red"?"Sin conexión: no se ha podido leer.":String(c||"No se ha podido leer"))}</span>`});
+}
+function iaSheet(){
+  openSheet(`<h3>Leer con Claude</h3>
+  <p style="margin:-4px 0 12px;color:var(--muted);font-size:.9rem;line-height:1.5">Cuando guardes una foto o un PDF, Claude lo lee y rellena título, carpeta, fechas, importe y notas. Tú lo revisas antes de guardar.<br><br>Necesita una <b>clave de la API de Anthropic</b> (console.anthropic.com → API Keys). Va aparte de tu plan de Claude y se paga por uso: leer un documento cuesta muy poco. El documento solo se envía a Claude en el momento de leerlo.</p>
+  <form id="iaf"><div class="field"><label class="flabel" for="iak">Clave de la API</label><input id="iak" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+  <div class="actions">${S.ia?`<button type="button" class="btn danger" data-act="iaoff">Desactivar</button>`:`<button type="button" class="btn ghost" data-act="close">Cancelar</button>`}<button class="btn" id="iasave">Guardar</button></div></form>`);
+  $("#iaf").addEventListener("submit",e=>{e.preventDefault();const k=$("#iak").value.trim();if(!k){toast("Pega la clave");return}
+    const b=$("#iasave");b.disabled=true;b.textContent="Comprobando…";
+    api("cerebro.claveIA",{clave:k}).then(r=>{S.sheet=false;closeSheet();apply(r);toast("Lectura con Claude activada")}).catch(err=>{b.disabled=false;b.textContent="Guardar";fail(err)})});
+}
+function editor(d){
+  d=d||{id:"",titulo:"",carpeta:S.cat||S.cats[0]||"",fecha:"",vence:"",importe:"",notas:""};F=null;delArm=false;
+  openSheet(`<h3>${d.id?"Documento":"Guardar"}</h3>
+  <form id="df">
+    <div class="field"><span class="flabel">Archivo</span><div class="filebox"><span id="fname">${d.archivo?esc(d.nombre||"Archivo guardado"):"Ninguno (puedes guardar solo una nota)"}</span>
+      ${d.archivo?`<button type="button" class="btn ghost" data-act="abrir" data-id="${esc(d.id)}">Ver</button><a class="btn ghost" style="text-decoration:none" href="https://drive.google.com/file/d/${encodeURIComponent(d.archivo)}/view" target="_blank" rel="noopener">Drive</a>`:""}
+      <label class="btn ghost" for="dfile">${d.archivo?"Cambiar":"Elegir foto o PDF"}</label><input type="file" id="dfile" accept="application/pdf,image/*" hidden></div>
+      <div id="iastat" style="font-size:.82rem;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap">${S.ia?(d.archivo?`<button type="button" class="lnk" data-act="ialeer" data-id="${esc(d.id)}">✨ Rellenar con Claude</button>`:"✨ Al elegir el archivo, Claude rellena los datos."):""}</div>
+      <div class="preview" id="dprev"></div></div>
+    <div class="field"><label class="flabel" for="dt">Título</label><input id="dt" value="${esc(d.titulo)}" placeholder="Seguro del coche" autocomplete="off"></div>
+    <div class="field"><label class="flabel" for="dc">Carpeta</label><select id="dc">${S.cats.map(c=>`<option${c===d.carpeta?" selected":""}>${esc(c)}</option>`).join("")}</select></div>
+    <div class="two"><div class="field"><label class="flabel" for="df1">Fecha del documento</label><input type="date" id="df1" value="${esc(d.fecha)}"></div>
+    <div class="field"><label class="flabel" for="dv">Vence</label><input type="date" id="dv" value="${esc(d.vence)}"></div></div>
+    <div class="field"><label class="flabel" for="di">Importe</label><input id="di" value="${esc(d.importe)}" placeholder="Opcional" inputmode="decimal" autocomplete="off"></div>
+    <div class="field"><label class="flabel" for="dn">Notas</label><textarea id="dn" placeholder="Lo que quieras recordar: nº de póliza, teléfono, condiciones…">${esc(d.notas)}</textarea></div>
+    <span style="display:block;font-size:.78rem;color:var(--muted);margin:-4px 0 10px">${d.vence||!d.id?"Con fecha de vencimiento te aviso 30 días antes, 7 días antes y el mismo día.":""}</span>
+    <div class="actions">${d.id?`<button type="button" class="btn danger" data-act="borrar" data-id="${esc(d.id)}">Borrar</button>`:"<span></span>"}<button class="btn" id="dsave">Guardar</button></div>
+  </form>`);
+  $("#dfile").addEventListener("change",async e=>{
+    const f=e.target.files&&e.target.files[0];if(!f)return;
+    try{F=await leer(f);$("#fname").textContent=f.name+" · "+Math.max(1,Math.round(F.size/1024))+" KB";
+      $("#dprev").innerHTML=F.preview?`<img src="${F.preview}" alt="">`:"";
+      if(!$("#dt").value.trim()){AUTO=f.name.replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").slice(0,80);$("#dt").value=AUTO}
+      if(S.ia)leerIA({data:F.data,mime:F.mime},!d.id);
+    }catch(err){F=null;toast(err.message||String(err))}
+  });
+  $("#df").addEventListener("submit",e=>{
+    e.preventDefault();
+    const doc={id:d.id,titulo:$("#dt").value.trim(),carpeta:$("#dc").value,fecha:$("#df1").value,vence:$("#dv").value,importe:$("#di").value.trim(),notas:$("#dn").value};
+    if(!doc.titulo){toast("Ponle un título");$("#dt").focus();return}
+    const b=$("#dsave");b.disabled=true;b.textContent=F?"Subiendo…":"Guardando…";S.pending++;
+    api("cerebro.guardar",Object.assign({doc},F?{data:F.data,mime:F.mime,nombre:F.nombre}:{})).then(r=>{S.pending--;S.sheet=false;closeSheet();apply(r);toast(d.id?"Guardado":"Guardado en "+doc.carpeta)})
+      .catch(err=>{S.pending--;b.disabled=false;b.textContent="Guardar";fail(err)});
+  });
+}
+/* Fotos: se reducen a 2000 px. PDF: tal cual (máx. 20 MB). */
+function leer(f){
+  return new Promise((res,rej)=>{
+    if(f.size>20*1024*1024){rej(new Error("El archivo pasa de 20 MB"));return}
+    if(/^image\//.test(f.type)&&!/gif|svg/.test(f.type)){
+      const img=new Image(),url=URL.createObjectURL(f);
+      img.onload=()=>{const max=2000,sc=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+        const du=c.toDataURL("image/jpeg",0.85);res({data:du.split(",")[1],mime:"image/jpeg",nombre:f.name.replace(/\.[^.]+$/,"")+".jpg",size:Math.round(du.length*0.75),preview:du})};
+      img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("No se puede leer esa imagen"))};img.src=url;return;
+    }
+    const r=new FileReader();r.onload=()=>{const du=String(r.result);res({data:du.split(",")[1],mime:f.type||"application/octet-stream",nombre:f.name,size:f.size,preview:""})};r.onerror=()=>rej(new Error("No se pudo leer el archivo"));r.readAsDataURL(f);
+  });
+}
+function b64blob(b64,mime){const bin=atob(b64),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
+
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="askf")return;e.preventDefault();
+  S.q=$("#askq").value.trim();S.asked=S.q;$("#res").innerHTML=resHtml();
+});
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]");if(!b)return;
+  switch(b.dataset.act){
+    case "cat":S.cat=b.dataset.c;render();window.scrollTo(0,0);break;
+    case "home":S.cat="";render();break;
+    case "nuevo":editor(null);break;
+    case "ver":{const d=S.docs.find(x=>x.id===b.dataset.id);if(d)editor(d);break}
+    case "abrir":{
+      const d=S.docs.find(x=>x.id===b.dataset.id);if(!d)break;
+      b.disabled=true;b.textContent="…";
+      api("cerebro.archivo",{id:d.id}).then(r=>{b.disabled=false;b.textContent="Ver";
+        const url=URL.createObjectURL(b64blob(r.data,r.mime));
+        if(/^image\//.test(r.mime)){$("#dprev").innerHTML=`<img src="${url}" alt="">`;return}
+        const a=document.createElement("a");a.href=url;a.download=r.nombre||"documento";a.target="_blank";document.body.appendChild(a);a.click();a.remove();
+      }).catch(err=>{b.disabled=false;b.textContent="Ver";fail(err)});
+      break}
+    case "borrar":
+      if(!delArm){delArm=true;b.textContent="¿Seguro? Toca otra vez";setTimeout(()=>{delArm=false;if(b.isConnected)b.textContent="Borrar"},3500);break}
+      delArm=false;S.pending++;api("cerebro.borrar",{id:b.dataset.id}).then(r=>{S.pending--;S.sheet=false;closeSheet();apply(r);toast("Borrado (está en la papelera de Drive)")}).catch(err=>{S.pending--;fail(err)});break;
+    case "newcat":openSheet(`<h3>Nueva carpeta</h3><form id="cf"><div class="field"><label class="flabel" for="cn">Nombre</label><input id="cn" placeholder="Viajes" autocomplete="off"></div><div class="actions"><button type="button" class="btn ghost" data-act="close">Cancelar</button><button class="btn">Crear</button></div></form>`);
+      setTimeout(()=>{const i=$("#cn");if(i)i.focus()},60);
+      $("#cf").addEventListener("submit",ev=>{ev.preventDefault();const n=$("#cn").value.trim();if(!n)return;api("cerebro.carpeta",{nombre:n}).then(r=>{S.sheet=false;closeSheet();apply(r);toast("Carpeta creada")}).catch(fail)});
+      break;
+    case "close":closeSheet();break;
+    case "ia":iaSheet();break;
+    case "iaoff":api("cerebro.claveIA",{clave:""}).then(r=>{S.sheet=false;closeSheet();apply(r);toast("Lectura con Claude desactivada")}).catch(fail);break;
+    case "ialeer":leerIA({id:b.dataset.id},false);break;
+    case "claude":{
+      const txt=S.asked+"\n\n(Busca la respuesta en mi carpeta de Google Drive «Segundo cerebro».)";
+      try{navigator.clipboard&&navigator.clipboard.writeText(txt)}catch(err){}
+      window.open("https://claude.ai/new?q="+encodeURIComponent(txt),"_blank","noopener");
+      toast("Pregunta copiada por si hay que pegarla");
+      break}
+  }
+});
+
+/* ---------- arranque ---------- */
+if(BOOT&&BOOT.ok&&BOOT.data)apply(BOOT.data);else render();
+refresh();
+document.addEventListener("visibilitychange",refresh);
+setInterval(refresh,120000);
+})();
+</script>
+</body>
+</html>
