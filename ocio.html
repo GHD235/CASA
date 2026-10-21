@@ -244,6 +244,8 @@ function del(id){
   track(api("ocio.delete",{id})).catch(()=>{});
 }
 function applyList(list){const m={};(list||[]).forEach(i=>m[i.id]=i);st.items=m;st.ready=true;cwrite();render()}
+/* Datos nuevos que trae la app principal (sin recargar la pantalla) */
+window.__casaData=function(l){if(Array.isArray(l)&&!st.pending&&!st.sheetOpen)applyList(l)};
 function refresh(){
   if(st.pending||st.sheetOpen||document.visibilityState!=="visible")return;
   api("ocio.list").then(l=>{if(!st.pending&&!st.sheetOpen)applyList(l)}).catch(()=>{});

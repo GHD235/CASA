@@ -46,20 +46,20 @@ iframe.app.on{visibility:visible;z-index:1}
 <div class="gate" id="gate" hidden>
   <form class="card" id="gateform" autocomplete="off">
     <h1>Apps casa</h1>
-    <p id="gatemsg">Abre el enlace que te han mandado (lleva tu clave) o escríbela aquí. Solo hace falta la primera vez en este móvil.</p>
+    <p id="gatemsg">Abre el enlace que te han mandado (lleva tu clave) o pégalo aquí. Solo hace falta la primera vez en este móvil.</p>
     <div class="err" id="gateerr" hidden></div>
-    <input id="gatekey" placeholder="Tu clave" autocapitalize="off" spellcheck="false" aria-label="Clave">
+    <input id="gatekey" placeholder="Tu enlace o tu clave" autocapitalize="off" spellcheck="false" aria-label="Clave">
     <button type="submit">Entrar</button>
   </form>
 </div>
 <div class="loading" id="loading" hidden><div style="text-align:center"><span></span><br>Cargando la casa…</div></div>
 
-<script>window.CASA_VERSION="2026-10-16.6";</script>
+<script>window.CASA_VERSION="2026-10-18.2";</script>
 <script>
 (function(){
 "use strict";
 var API=window.CASA_API||"";
-var APPS=["inicio","menu","ocio","tareas"];
+var APPS=["inicio","menu","ocio","tareas","cerebro"];
 var K_KEY="casa-clave",K_BOOT="casa-boot";
 function lsg(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lss(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
@@ -96,6 +96,7 @@ function remember(b,d){
   var a=b.action||"";
   if(a.indexOf("casa.")===0&&d.activas){cache.tareas=d;saveCache()}
   else if(a==="ocio.list"&&Array.isArray(d)){cache.ocio=d;saveCache()}
+  else if(a.indexOf("cerebro.")===0&&d.docs){cache.cerebro=d;saveCache()}
   else if(a==="menu.load"&&d.semana===lunes()){cache.menu=d;saveCache()}
 }
 var saveT=null;
@@ -108,6 +109,7 @@ window.casaBoot=function(app){
   var d=cache&&cache[app];if(!d)return null;
   d=JSON.parse(JSON.stringify(d));
   if(app==="tareas"){d.now=Date.now();d.hoy=ymd(new Date())}
+  if(app==="cerebro")d.hoy=ymd(new Date());
   if(app==="inicio"&&d.casa)d.casa.now=Date.now();
   if(app==="menu"&&d.semana!==lunes())d={semana:lunes(),recetas:d.recetas,plan:null};
   return {ok:true,data:d};
@@ -122,7 +124,8 @@ function build(){
   if(startApp!=="inicio"){make("inicio");try{history.pushState({app:startApp},"","#"+startApp)}catch(e){}}
   show(startApp);
   /* el resto se precarga sin estorbar */
-  var rest=APPS.filter(function(a){return !frames[a]});
+  /* Orden por uso: Tareas, Menú, Segundo cerebro y, al final, Ocio (la que menos se usa) */
+  var rest=["tareas","menu","cerebro","ocio"].filter(function(a){return !frames[a]&&(a!=="cerebro"||(cache&&cache.cerebro))});
   (function next(){var a=rest.shift();if(!a)return;make(a);frames[a].addEventListener("load",function(){setTimeout(next,60)},{once:true})})();
 }
 function make(app){
@@ -130,7 +133,7 @@ function make(app){
   var f=document.createElement("iframe");
   f.className="app";f.title=app;f.setAttribute("allow","clipboard-read; clipboard-write; web-share");
   f.addEventListener("load",function(){f.ready=true;try{f.contentWindow.__casaShow(app===cur)}catch(e){}});
-  f.src=app+".html?v=2026-10-16.6";
+  f.src=app+".html?v=2026-10-18.2";
   document.body.appendChild(f);frames[app]=f;return f;
 }
 function show(app){
@@ -166,15 +169,19 @@ function refreshAll(first){
     if(r&&r.error==="clave"){lockOut(first?"Esa clave no vale. Revisa el enlace o pide uno nuevo.":null);return}
     if(!r||!r.ok){if(first)fallo(r&&r.error);return}
     var old=cache||{};
-    cache={inicio:r.data.inicio,menu:r.data.menu,ocio:r.data.ocio,tareas:r.data.tareas};
+    cache={inicio:r.data.inicio,menu:r.data.menu,ocio:r.data.ocio,tareas:r.data.tareas,cerebro:r.data.cerebro||null};
     if(r.data.yo&&!lsg("casa-yo"))lss("casa-yo",r.data.yo);
     lss(K_BOOT,JSON.stringify(cache));
     if(first){build();return}
     APPS.forEach(function(a){
       var f=frames[a];if(!f||!f.ready)return;
       if(a==="inicio"){try{f.contentWindow.__casaApply(cache.inicio)}catch(e){}return}
-      if(a===cur)return; /* la que está en pantalla ya se pone al día sola */
-      if(sig(a,old[a])!==sig(a,cache[a])){f.ready=false;try{f.contentWindow.location.reload()}catch(e){}}
+      if(sig(a,old[a])===sig(a,cache[a]))return;
+      /* se le pasan los datos nuevos sin recargar la pantalla (así nunca se queda en blanco) */
+      var w=null;try{w=f.contentWindow}catch(e){}
+      if(w&&typeof w.__casaData==="function"){try{w.__casaData(JSON.parse(JSON.stringify(cache[a])))}catch(e){}return}
+      if(a===cur)return; /* versión antigua de la pantalla: se pone al día sola */
+      f.ready=false;try{w.location.reload()}catch(e){}
     });
   }).catch(function(e){if(first)fallo(String(e&&e.message||e))});
 }
@@ -197,6 +204,7 @@ function lockOut(msg){
 }
 $("gateform").addEventListener("submit",function(e){
   e.preventDefault();var v=$("gatekey").value.trim();if(!v)return;
+  var mv=v.match(/k=([A-Za-z0-9]+)/);if(mv)v=mv[1];   /* también vale pegar el enlace entero */
   key=v;lss(K_KEY,key);cache=null;lss(K_BOOT,null);
   $("gate").hidden=true;$("loading").hidden=false;refreshAll(true);
 });
@@ -213,6 +221,70 @@ document.addEventListener("visibilitychange",function(){
   if(document.visibilityState==="hidden"){hiddenAt=Date.now();return}
   if(built&&hiddenAt&&Date.now()-hiddenAt>60000)refreshAll(false);
 });
+
+/* ---------- Notificaciones de la app (Firebase Cloud Messaging) ---------- */
+var K_PT="casa-push-token",FB="https://www.gstatic.com/firebasejs/10.12.2/";
+function isIOS(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1)}
+function standalone(){return (window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true}
+function pushOk(){return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window}
+function addScript(src){return new Promise(function(res,rej){var s=document.createElement("script");s.src=src;s.onload=res;s.onerror=function(){rej(new Error("No se pudo cargar Firebase. Revisa la conexión."))};document.head.appendChild(s)})}
+var fbReady=null;
+function fb(cfg){
+  if(!fbReady)fbReady=addScript(FB+"firebase-app-compat.js").then(function(){return addScript(FB+"firebase-messaging-compat.js")});
+  return fbReady.then(function(){
+    var app=window.firebase.apps.length?window.firebase.app():window.firebase.initializeApp({apiKey:cfg.apiKey,authDomain:cfg.authDomain,projectId:cfg.projectId,messagingSenderId:cfg.messagingSenderId,appId:cfg.appId});
+    return window.firebase.messaging(app);
+  });
+}
+function swReg2(){return navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(function(){return navigator.serviceWorker.ready})}
+function tokenDe(cfg){return Promise.all([fb(cfg),swReg2()]).then(function(x){return x[0].getToken({vapidKey:cfg.vapidKey,serviceWorkerRegistration:x[1]})})}
+function disp(){var u=navigator.userAgent;return /iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":"Ordenador"}
+window.casaPush={
+  state:function(){
+    if(isIOS()&&!standalone())return "ios-instalar";
+    if(!pushOk())return "no";
+    if(Notification.permission==="denied")return "bloqueado";
+    return Notification.permission==="granted"&&lsg(K_PT)?"on":"off";
+  },
+  enable:function(cfg){
+    return permiso().then(function(){return tokenDe(cfg)}).then(function(t){
+      if(!t)throw new Error("Firebase no ha dado identificador a este móvil.");
+      return post({action:"casa.pushSub",token:t,disp:disp()}).then(function(r){if(r&&r.ok){lss(K_PT,t);dirty=true}return r});
+    });
+  },
+  disable:function(){
+    var t=lsg(K_PT);lss(K_PT,null);
+    var cfg=cache&&cache.tareas&&cache.tareas.pushWeb;
+    if(cfg)fb(cfg).then(function(m){return m.deleteToken()}).catch(function(){});
+    return t?post({action:"casa.pushUnsub",token:t}):Promise.resolve(null);
+  }
+};
+/* El permiso se pide desde la página principal (en iPhone no vale pedirlo desde dentro de una pantalla) */
+function permiso(){
+  if(Notification.permission==="granted")return Promise.resolve();
+  if(Notification.permission==="denied")return Promise.reject(new Error("Las notificaciones están bloqueadas en este navegador."));
+  return new Promise(function(res,rej){
+    var w=document.createElement("div");w.className="gate";w.style.cssText="position:fixed;inset:0;z-index:50;background:rgba(10,14,18,.55);min-height:0";
+    w.innerHTML='<div class="card"><h1>Notificaciones</h1><p>Toca el botón y, cuando el móvil pregunte, elige <b>Permitir</b>.</p><button type="button" id="pushyes">Permitir notificaciones</button><p style="text-align:center;margin:12px 0 0"><a href="#" id="pushno" style="color:inherit">Ahora no</a></p></div>';
+    document.body.appendChild(w);
+    w.querySelector("#pushyes").addEventListener("click",function(){
+      Notification.requestPermission().then(function(p){w.remove();if(p==="granted")res();else rej(new Error(p==="denied"?"Has bloqueado las notificaciones. Actívalas en los ajustes del navegador.":"Sin permiso, no se pueden activar."))},function(e){w.remove();rej(e)});
+    });
+    w.querySelector("#pushno").addEventListener("click",function(ev){ev.preventDefault();w.remove();rej(new Error("Sin permiso, no se pueden activar."))});
+  });
+}
+/* Al abrir: si este móvil tenía las notificaciones, se comprueba que su identificador sigue igual */
+function pushRefresh(){
+  var cfg=cache&&cache.tareas&&cache.tareas.pushWeb,old=lsg(K_PT);
+  if(!cfg||!old||!pushOk()||Notification.permission!=="granted")return;
+  tokenDe(cfg).then(function(t){
+    if(!t||t===old)return;
+    post({action:"casa.pushSub",token:t,disp:disp()}).then(function(r){if(r&&r.ok){lss(K_PT,t);post({action:"casa.pushUnsub",token:old})}});
+  }).catch(function(){});
+}
+setTimeout(pushRefresh,5000);
+/* Al tocar una notificación con la app ya abierta: ir a Tareas */
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",function(e){if(e.data&&e.data.casaNav&&built)window.casaNav(e.data.casaNav)});
 
 /* Versiones nuevas de la app: se descargan solas y se ponen al momento (si se acaba de abrir) o al volver a la app */
 if("serviceWorker" in navigator){
